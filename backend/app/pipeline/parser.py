@@ -24,9 +24,22 @@ Geometriedaten fuer eine deterministische 3D-Rekonstruktion.
 
 Kritische Regel: Deine Ausgabe muss die reale Geometrie des Plans so genau wie \
 moeglich wiedergeben - erfinde keine Waende, Tueren oder Fenster, die nicht im \
-Plan zu erkennen sind. Wenn ein Mass unsicher ist, nutze eine plausible Schaetzung \
+Plan zu erkennen sind (also keine Raeume/Elemente hinzufuegen, die nicht im Bild \
+vorhanden sind). Wenn ein Mass unsicher ist, nutze eine plausible Schaetzung \
 gemaess der unten stehenden Referenz und vermerke die Unsicherheit in source_notes \
 statt zu raten und es als sicher auszugeben.
+
+Sehr wichtig - gib NIEMALS eine leere walls/rooms-Liste zurueck, nur weil kein \
+Massstab oder keine Masskette im Bild steht: Die meisten realen Grundrisse \
+(gerade aeltere oder informelle) haben keine expliziten Zahlen. Schaetze in \
+diesem Fall den Massstab aus typischen Raumgroessen und den sichtbaren \
+Proportionen im Bild (z.B. Schlafzimmer ca. 3x3 bis 4x4m, Bad ca. 2x2m, \
+Wohnzimmer/Wohnkueche ca. 4x5m, Flur-Breite ca. 1-1.5m, Tuerbreite ca. 0.8-0.9m \
+als Referenzgroesse im Bild) und wende diesen geschaetzten Massstab konsistent \
+auf den gesamten Plan an. Setze scale_hint dann auf eine Beschreibung wie \
+"geschaetzt, kein Massstab im Plan angegeben" und erklaere die Schaetzgrundlage \
+in source_notes. Eine vollstaendige, geometrisch stimmige Schaetzung ist immer \
+nuetzlicher als eine leere Antwort.
 
 Nutze bei der Interpretation folgende Referenz (Normen & Praxiskonventionen):
 

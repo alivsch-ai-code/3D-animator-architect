@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from app.models.schemas import FloorPlanGeometry, Project, ProjectStatus
+from app.pipeline.convert import ensure_png
 from app.pipeline.geometry import export_glb
 from app.pipeline.parser import get_parser
 from app.pipeline.render import get_renderer
@@ -37,13 +38,22 @@ def get_project(project_id: str) -> Project:
 @router.post("/{project_id}/floorplan", response_model=Project)
 async def upload_floorplan(project_id: str, file: UploadFile) -> Project:
     project = _get_or_404(project_id)
-    content = await file.read()
-    filename = file.filename or "upload.png"
-    project_store.save_floorplan_upload(project_id, filename, content)
+    raw_content = await file.read()
+    original_filename = file.filename or "upload.png"
+
+    try:
+        # PDF-Uploads (uebliches Format bei Maklern) werden einheitlich zu PNG
+        # konvertiert (erste Seite) - siehe pipeline/convert.py.
+        png_content, media_type = ensure_png(raw_content, file.content_type, original_filename)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Datei konnte nicht gelesen werden: {exc}") from exc
+
+    filename = f"{original_filename.rsplit('.', 1)[0]}.png"
+    project_store.save_floorplan_upload(project_id, filename, png_content)
 
     try:
         parser = get_parser()
-        geometry = parser.parse_floorplan(content, media_type=file.content_type or "image/png")
+        geometry = parser.parse_floorplan(png_content, media_type=media_type)
     except Exception as exc:  # noqa: BLE001 - dem Nutzer den konkreten Parsing-Fehler zeigen
         project.status = ProjectStatus.failed
         project_store.save_project(project)

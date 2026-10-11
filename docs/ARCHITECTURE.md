@@ -108,11 +108,28 @@ frontend/
 | Fotorealistisches Rendering | **Schnittstelle + einfacher Preview-Fallback implementiert.** Produktionsreifes Fotorealismus-Backend (SDXL/ControlNet oder Blender headless) muss noch angebunden werden — erfordert GPU-Infrastruktur, die in dieser Umgebung nicht verfügbar ist. Siehe `backend/app/pipeline/render.py` für den Erweiterungspunkt |
 | IFC-Export | Nicht implementiert, Schema ist aber IFC-kompatibel angelegt (v2) |
 
+## Live-Testergebnis: Grenzen reiner VLM-Koordinatenextraktion
+
+Live-Tests mit echten, gemeinfreien Grundrissen
+(`backend/tests/fixtures/floorplans/FINDINGS.md`) haben eine wichtige
+Erkenntnis bestätigt: Ein reines Vision-Chat-Modell (getestet:
+`lucataco/qwen3-vl-8b-instruct` via Replicate) liest Textinhalte (Raumlabels,
+Flächenangaben) zuverlässig, liefert bei maßlosen oder komplexen Plänen aber
+**keine echte pixelgenaue Geometrie** — teils identische Platzhalter-Boxen
+für sichtbar unterschiedlich große Räume, teils leere Ergebnisse durch
+Output-Token-Limits. Das ist eine bekannte Schwäche von VLMs bei
+"Grounding"-Aufgaben generell, kein reines Prompt- oder Modell-Problem.
+**Konsequenz für Punkt 2 der Roadmap unten**: Das spezialisierte
+Segmentierungsmodell ist damit nicht mehr "nice-to-have zur
+Kreuzvalidierung", sondern die empfohlene primäre Geometriequelle, mit dem
+LLM nur noch für Semantik (Raumtyp, Normprüfung, Stil).
+
 ## Nächste Schritte (Roadmap)
 
 1. Render-Backend anbinden (Replicate/Stability-API für ControlNet, oder Blender-Worker).
-2. Spezialisiertes Segmentierungsmodell (CubiCasa5K-trainiert, z.B. RoomFormer) als zweite
-   Parsing-Quelle neben Claude Vision, zur Kreuzvalidierung der Wandkoordinaten.
+2. Spezialisiertes Segmentierungsmodell (CubiCasa5K-trainiert, z.B. RoomFormer) als
+   primäre Geometrie-Quelle statt/zusätzlich zu reiner LLM-Koordinatenextraktion
+   (siehe Live-Testergebnis oben).
 3. Türöffnungen als echte Boolean-Cutouts statt Wandsegment-Lücken (bessere Fensterrahmen-Optik).
 4. Mehrgeschossige Gebäude (Treppen, Geschossstapelung — IFC `IfcBuildingStorey`).
 5. Echter IFC-Export für Übergabe an Architekturbüros/BIM-Tools.

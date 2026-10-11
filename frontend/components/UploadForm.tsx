@@ -32,7 +32,7 @@ export default function UploadForm() {
       <div>
         <label className="block text-sm font-medium mb-1">Projektname</label>
         <input
-          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors"
           placeholder="z.B. Musterstraße 12, 3-Zimmer-Wohnung"
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -40,10 +40,10 @@ export default function UploadForm() {
         />
       </div>
       <div>
-        <label className="block text-sm font-medium mb-1">Grundriss (Bild)</label>
+        <label className="block text-sm font-medium mb-1">Grundriss (Bild oder PDF)</label>
         <input
           type="file"
-          accept="image/png,image/jpeg,image/webp"
+          accept="image/png,image/jpeg,image/webp,application/pdf"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="w-full text-sm"
           required
@@ -53,8 +53,11 @@ export default function UploadForm() {
       <button
         type="submit"
         disabled={busy || !file || !name.trim()}
-        className="rounded-md bg-neutral-900 text-white px-4 py-2 text-sm font-medium hover:bg-neutral-700 disabled:opacity-50"
+        className="rounded-md bg-accent text-white px-4 py-2.5 text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-40 inline-flex items-center justify-center gap-2"
       >
+        {busy && (
+          <span className="h-3.5 w-3.5 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+        )}
         {busy ? "Analysiere Grundriss…" : "Grundriss hochladen & analysieren"}
       </button>
     </form>

@@ -1,7 +1,18 @@
 import type { FloorPlanGeometry, Project } from "./types";
 
+// Browser-Anfragen (Client-Komponenten) nutzen die oeffentliche Domain.
+// Server-seitiges Rendering (Server-Komponenten wie app/page.tsx) laeuft im
+// selben Prozess auf demselben Host wie das Backend - dort ueber die oeffentliche
+// Domain zu gehen wuerde einen unnoetigen Umweg nach aussen und zurueck machen
+// und haengt zudem an der (ggf. verzoegerten) lokalen DNS-Aufloesung dieses
+// Servers. API_BASE_URL_INTERNAL (kein NEXT_PUBLIC_-Prefix, landet nie im
+// Client-Bundle) adressiert das Backend serverseitig direkt.
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  typeof window === "undefined"
+    ? (process.env.API_BASE_URL_INTERNAL ??
+      process.env.NEXT_PUBLIC_API_BASE_URL ??
+      "http://localhost:8000")
+    : (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000");
 
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
