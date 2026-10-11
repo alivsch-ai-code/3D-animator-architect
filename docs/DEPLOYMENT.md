@@ -1,71 +1,75 @@
 # Deployment (aktueller Stand)
 
-## Live-URLs
+## Live-URL
 
-- **Frontend**: `http://<server-ip>:3001`
-- **Backend/API**: `http://<server-ip>:8000` (`/docs` für OpenAPI-UI)
+- **App**: `https://<subdomain-dieses-deployments>` (nginx-Reverse-Proxy mit
+  Let's-Encrypt-SSL, `/api/*` → Backend, Rest → Frontend)
 
-Die konkrete IP-Adresse ist bewusst nicht in diesem öffentlichen Repo
-dokumentiert — sie wird separat (nicht-versioniert) weitergegeben.
+Die konkrete Subdomain/IP ist bewusst nicht in diesem öffentlichen Repo
+dokumentiert — sie wird separat (nicht-versioniert) weitergegeben, siehe
+`docs/DEPLOYMENT.local.md` (gitignored).
 
-Gewählt wurde die Variante "offene Ports per IP" statt Subdomain+SSL, damit sofort
-ohne DNS-Abhängigkeit live getestet werden kann (siehe Diskussion unten).
-Entsprechend per `ufw` geöffnet (Backend-Port + Frontend-Port, siehe `.env`/lokale
-Notizen für die konkreten Portnummern dieses Deployments):
-
-```bash
-sudo ufw allow <backend-port>/tcp comment '3D-Animator-Architect backend'
-sudo ufw allow <frontend-port>/tcp comment '3D-Animator-Architect frontend'
-```
+**Historie der Entscheidung**: Zunächst wurde direkter IP:Port-Zugriff über
+zusätzlich geöffnete `ufw`-Ports versucht — das scheiterte von außen trotz
+korrekter lokaler Firewall-Regeln, vermutlich durch eine vorgelagerte
+Cloud-Firewall des Hosters, die nur Standardports (22/80/443) durchlässt.
+Umgestellt auf Subdomain + nginx-Reverse-Proxy über die ohnehin offenen
+Ports 80/443 — das funktioniert zuverlässig, ist sicherer (TLS statt
+Klartext, kein zusätzlicher offener Port) und entspricht der Konvention,
+die für andere Projekte auf demselben Server bereits verwendet wird.
 
 ## Wichtig: Dieser Server hostet mehrere Projekte
 
 Der Zielserver läuft bereits mit nginx + Certbot für andere, nicht mit diesem
-Repo verbundene Projekte unter eigenen Subdomains. `ufw`-Default-Policy war
-vorher nur SSH/80/443 — die neuen Ports sind eine bewusste, mit dem Nutzer
-abgestimmte Erweiterung nur für dieses Projekt. Diese bestehenden
-nginx-Konfigurationen anderer Projekte wurden **nicht verändert**.
+Repo verbundene Projekte unter eigenen Subdomains. Die nginx-Konfiguration
+für dieses Projekt wurde als zusätzliche, eigenständige Site angelegt;
+bestehende Konfigurationen anderer Projekte wurden **nicht verändert**.
 
-## ⚠️ Aktueller Prozess-Stand ist NICHT persistent
+## Persistenz: systemd-Services
 
-Backend und Frontend laufen aktuell als einfache Hintergrundprozesse
-(`uvicorn`/`next dev`), nicht als systemd-Service. Das heißt konkret:
+Backend, Frontend und der virtuelle Display für den Renderer laufen als
+systemd-Services und überleben damit Server-Neustarts automatisch
+(eingerichtet, nachdem ein Server-Neustart die vorher manuell gestarteten
+Dev-Prozesse beendet hatte):
 
-- Nach einem Server-Neustart laufen sie **nicht automatisch** wieder an.
-- Beendet sich die startende Arbeits-Session/der Prozessbaum, können die
-  Server mit beendet werden.
+- `3d-architect-xvfb.service` — virtueller X-Display (`Xvfb :99`), Backend
+  und Frontend hängen implizit davon ab (Renderer braucht einen OpenGL-Kontext)
+- `3d-architect-backend.service` — `uvicorn`, bindet nur auf `127.0.0.1:8000`
+  (nginx übernimmt die öffentliche Erreichbarkeit)
+- `3d-architect-frontend.service` — Next.js **Produktions-Build**
+  (`npm run build` + `next start`, nicht der Dev-Server), bindet auf
+  `127.0.0.1:3001`
 
-**Nächster Schritt für echten Dauerbetrieb**: systemd-Units anlegen oder
-pm2/supervisor nutzen, plus `next build` + `next start` statt `next dev`
-fürs Frontend (Produktions-Build statt Dev-Server mit Hot-Reload). Das wurde
-hier bewusst noch nicht gemacht, um nicht unangekündigt dauerhafte
-systemd-Services auf einem fremd-/mehrfach-genutzten Server einzurichten —
-bei Bedarf gezielt nachziehen.
+Alle drei sind `enabled` (Autostart) und `Restart=always`. Unit-Dateien unter
+`/etc/systemd/system/3d-architect-*.service` auf dem Zielserver.
 
-## Start-Kommandos
+### Nach Code-Änderungen neu ausrollen
 
 ```bash
-# Virtueller Display fuer den Renderer (einmalig pro Boot)
-Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp &
-
 # Backend
-cd backend && source .venv/bin/activate
-DISPLAY=:99 uvicorn app.main:app --host 0.0.0.0 --port 8000
+cd backend && sudo systemctl restart 3d-architect-backend
 
-# Frontend
-cd frontend
-npm run dev -- --hostname 0.0.0.0 --port 3001
+# Frontend (Produktions-Build muss neu gebaut werden)
+cd frontend && npm run build && sudo systemctl restart 3d-architect-frontend
 ```
 
-`frontend/.env.local` muss `NEXT_PUBLIC_API_BASE_URL` auf die öffentlich
-erreichbare Backend-Adresse setzen (muss bei Domain-/Port-Wechsel angepasst
-und das Frontend neu gestartet werden, da `NEXT_PUBLIC_*`-Variablen beim
-Build/Start in das Client-Bundle einkompiliert werden). `backend/.env`
-entsprechend um `CORS_ORIGINS` mit der Frontend-Origin ergänzen — beide
-`.env`-Dateien sind lokal und nicht Teil des Git-Repos.
+### Logs / Status
 
-## Hinweis Port 3000
+```bash
+sudo systemctl status 3d-architect-backend 3d-architect-frontend 3d-architect-xvfb
+sudo journalctl -u 3d-architect-backend -f
+```
 
-Der Standard-Port 3000 war beim ersten Start bereits durch einen anderen
-Prozess auf dem Zielserver belegt — deshalb läuft dieses Frontend auf einem
-alternativen Port (siehe `.env.local` des jeweiligen Deployments).
+## Konfiguration
+
+`frontend/.env.local`:
+- `NEXT_PUBLIC_API_BASE_URL` — öffentliche App-URL, landet im Browser-Bundle
+- `API_BASE_URL_INTERNAL` — `http://127.0.0.1:8000`, nur für serverseitiges
+  Rendering (Server-Komponenten) genutzt, damit SSR-Requests nicht unnötig
+  über die öffentliche Domain/DNS zurück zum selben Host laufen müssen
+  (siehe `frontend/lib/api.ts`)
+
+`backend/.env`: `CORS_ORIGINS` muss die öffentliche App-URL enthalten (auch
+wenn durch den Reverse-Proxy die meisten Requests ohnehin same-origin sind).
+
+Beide `.env`-Dateien sind lokal auf dem Server und nicht Teil des Git-Repos.
