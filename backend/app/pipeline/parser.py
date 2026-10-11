@@ -126,17 +126,119 @@ class ClaudeFloorPlanParser:
 
     @staticmethod
     def _validate(raw_text: str) -> FloorPlanGeometry:
-        text = raw_text.strip()
-        if text.startswith("```"):
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-        try:
-            data = json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Claude-Antwort ist kein valides JSON: {exc}\nRohtext: {raw_text[:500]}") from exc
+        return _parse_json_response(raw_text, source="Claude")
 
-        try:
-            return FloorPlanGeometry.model_validate(data)
-        except ValidationError as exc:
-            raise ValueError(f"Claude-JSON entspricht nicht dem FloorPlanGeometry-Schema: {exc}") from exc
+
+def _resolve_version_ref(client, model_slug: str) -> str:
+    """Manche Community-Modelle auf Replicate akzeptieren den "owner/name"-Shortcut
+    nicht direkt (404) und brauchen eine versions-gepinnte Referenz
+    "owner/name:version". Loest das automatisch auf, falls noch kein ":" enthalten ist.
+    """
+    if ":" in model_slug:
+        return model_slug
+    owner, name = model_slug.split("/", 1)
+    model = client.models.get(f"{owner}/{name}")
+    return f"{owner}/{name}:{model.latest_version.id}"
+
+
+def _parse_json_response(raw_text: str, source: str) -> FloorPlanGeometry:
+    text = raw_text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{source}-Antwort ist kein valides JSON: {exc}\nRohtext: {raw_text[:500]}") from exc
+
+    try:
+        return FloorPlanGeometry.model_validate(data)
+    except ValidationError as exc:
+        raise ValueError(f"{source}-JSON entspricht nicht dem FloorPlanGeometry-Schema: {exc}") from exc
+
+
+class GeminiFloorPlanParser:
+    """Alternative Parser-Implementierung mit Google Gemini (eigener API-Key).
+
+    Nutzt dieselbe Schema- und Normen-Vorgabe wie der Claude-Parser - nur der
+    Modellanbieter unterscheidet sich. Siehe docs/LLM-DECISION.md: Claude Opus 5
+    bleibt die Empfehlung, Gemini ist als austauschbares Backend verfuegbar,
+    z.B. zum Kostenvergleich oder falls bereits ein Gemini-Key vorhanden ist.
+
+    Hinweis: Der Gemini-Modellname (`gemini_parser_model`) sollte vor produktivem
+    Einsatz gegen die aktuelle Google-AI-Studio-Modellliste geprueft werden, da
+    sich Modell-IDs bei Google regelmaessig aendern.
+    """
+
+    def __init__(self, api_key: str | None = None, model: str | None = None) -> None:
+        settings = get_settings()
+        from google import genai
+
+        self._client = genai.Client(api_key=api_key or settings.gemini_api_key)
+        self._model = model or settings.gemini_parser_model
+
+    def parse_floorplan(self, image_bytes: bytes, media_type: str = "image/png") -> FloorPlanGeometry:
+        from google.genai import types
+
+        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(standards_context=load_standards_context())
+        response = self._client.models.generate_content(
+            model=self._model,
+            contents=[
+                types.Part.from_bytes(data=image_bytes, mime_type=media_type),
+                "Analysiere diesen Grundriss und gib die exakte strukturierte Geometrie als JSON zurueck.",
+            ],
+            config=types.GenerateContentConfig(system_instruction=system_prompt),
+        )
+        return _parse_json_response(response.text, source="Gemini")
+
+
+class ReplicateFloorPlanParser:
+    """Guenstigere Alternative: offenes Vision-LLM, gehostet auf Replicate.
+
+    Empfehlung (docs/LLM-DECISION.md): qwen/qwen2.5-vl-72b-instruct als starkes
+    offenes Vision-Modell mit guter struktureller JSON-Ausgabe. Qualitaet bei
+    komplexen Mehrfach-Constraint-Pruefungen (mehrere Normen gleichzeitig) liegt
+    erfahrungsgemaess unter Claude Opus 5 - empfohlen fuer Kostenoptimierung bei
+    einfachen Plaenen, nicht als Standard-Backend.
+    """
+
+    def __init__(self, api_token: str | None = None, model: str | None = None) -> None:
+        settings = get_settings()
+        import replicate as replicate_sdk
+
+        self._client = replicate_sdk.Client(api_token=api_token or settings.replicate_api_token)
+        self._model = _resolve_version_ref(self._client, model or settings.replicate_parser_model)
+
+    def parse_floorplan(self, image_bytes: bytes, media_type: str = "image/png") -> FloorPlanGeometry:
+        image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+        data_uri = f"data:{media_type};base64,{image_b64}"
+        system_prompt = SYSTEM_PROMPT_TEMPLATE.format(standards_context=load_standards_context())
+
+        # Input-Feldnamen sind modellspezifisch (hier: lucataco/qwen3-vl-8b-instruct
+        # nutzt "media" statt "image"); bei Wechsel des Modells pruefen via
+        # `replicate.Client().models.get(slug).latest_version.openapi_schema`.
+        output = self._client.run(
+            self._model,
+            input={
+                "media": data_uri,
+                "prompt": (
+                    f"{system_prompt}\n\nAnalysiere diesen Grundriss und gib die "
+                    "exakte strukturierte Geometrie als JSON zurueck."
+                ),
+                "max_new_tokens": 4096,
+                "temperature": 0.1,
+            },
+        )
+        raw_text = "".join(output) if not isinstance(output, str) else output
+        return _parse_json_response(raw_text, source="Replicate")
+
+
+def get_parser() -> LLMClient:
+    """Factory: waehlt die Parser-Implementierung nach settings.parser_provider."""
+    settings = get_settings()
+    if settings.parser_provider == "gemini":
+        return GeminiFloorPlanParser()
+    if settings.parser_provider == "replicate":
+        return ReplicateFloorPlanParser()
+    return ClaudeFloorPlanParser()
