@@ -16,5 +16,8 @@ frontend/.env*.local
 .env.*
 !.env.example
 
+# Lokale, nicht-oeffentliche Infrastruktur-Notizen (echte IP/Ports/Servername)
+docs/DEPLOYMENT.local.md
+
 # OS
 .DS_Store

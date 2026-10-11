@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     storage_dir: Path = BACKEND_DIR / "data"
     standards_doc_path: Path = REPO_ROOT / "docs" / "STANDARDS.md"
 
+    # Deployment-spezifische Origins (z.B. die oeffentliche Server-IP) gehoeren
+    # in .env (CORS_ORIGINS=["http://<ip>:3001"]), nicht fest in den Code.
     cors_origins: list[str] = [
         "http://localhost:3000",
         "http://localhost:3001",
