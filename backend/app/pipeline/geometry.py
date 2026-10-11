@@ -147,8 +147,97 @@ def build_scene(geometry: FloorPlanGeometry) -> trimesh.Scene:
     return scene
 
 
+# glTF/GLB (und damit three.js/react-three-fiber im Frontend) erwartet laut
+# Spezifikation Y-up. Unsere interne Geometrie ist Z-up (Hoehe = Z-Achse,
+# Grundriss liegt in der XY-Ebene, siehe build_scene). trimesh exportiert
+# die Szene unveraendert, OHNE diese Konvertierung - ohne die Rotation hier
+# "steht" das flache Gebaeude im Viewer hochkant auf der Kante (sieht aus
+# wie ein Regal statt wie ein Grundriss). Die Konvertierung betrifft NUR den
+# GLB-Export; build_scene() selbst bleibt Z-up fuer Renderer/Kamera-Berechnungen.
+_Z_UP_TO_Y_UP = trimesh.transformations.rotation_matrix(-np.pi / 2, [1, 0, 0])
+
+
+def _polygon_area(room: Room) -> float:
+    pts = [(p.x, p.y) for p in room.polygon]
+    poly = Polygon(pts)
+    return poly.area if poly.is_valid else 0.0
+
+
+_PREFERRED_INTERIOR_TYPES = (
+    RoomType.living_room,
+    RoomType.kitchen,
+    RoomType.bedroom,
+    RoomType.bathroom,
+)
+
+
+def pick_main_room(geometry: FloorPlanGeometry, room_id: str | None = None) -> Room | None:
+    """Waehlt den Raum fuer die Innenraum-Kameraperspektive (render.py).
+
+    Ohne explizite room_id wird der groesste Raum unter den "echten"
+    Wohnraum-Typen gewaehlt (Wohnzimmer/Kueche/Schlafzimmer/Bad). Typen wie
+    "other" (z.B. ein offener Innenhof ohne durchgehende Waende) oder
+    Flur/Abstellraum/Balkon werden bewusst gemieden, da sie fuer ein
+    Marketing-Rendering ("fotorealistische Darstellung der Zimmer") selten
+    die gewuenschte Aufnahme ergeben.
+    """
+    if not geometry.rooms:
+        return None
+    if room_id is not None:
+        for room in geometry.rooms:
+            if room.id == room_id:
+                return room
+    preferred = [r for r in geometry.rooms if r.type in _PREFERRED_INTERIOR_TYPES]
+    candidates = preferred or geometry.rooms
+    return max(candidates, key=_polygon_area)
+
+
+def interior_camera_transform(
+    room: Room, eye_height: float = 1.6, look_height: float = 1.3
+) -> np.ndarray:
+    """Kamera-Pose fuer eine Innenraumaufnahme (Z-up, wie build_scene()).
+
+    Steht ca. 0.9m von der am weitesten vom Raumzentrum entfernten Ecke
+    entfernt (grob: "Blick von einer Raumecke zur gegenueberliegenden
+    Wand") statt einer Aussen-/Vogelperspektive auf das gesamte Gebaeude -
+    sonst interpretiert das Fotorealismus-Modell die kompakte Aussenform
+    als Moebelstueck statt als Rauminnenansicht (siehe docs/ARCHITECTURE.md
+    "Live-Testergebnis" fuer den beobachteten Fehlerfall).
+    """
+    poly_pts = np.array([[p.x, p.y] for p in room.polygon])
+    centroid = poly_pts.mean(axis=0)
+    dists = np.linalg.norm(poly_pts - centroid, axis=1)
+    corner = poly_pts[int(np.argmax(dists))]
+
+    to_center = centroid - corner
+    norm = np.linalg.norm(to_center)
+    direction = to_center / norm if norm > 1e-6 else np.array([1.0, 0.0])
+    eye_xy = corner + direction * min(0.9, norm * 0.3)
+
+    eye = np.array([eye_xy[0], eye_xy[1], eye_height])
+    target = np.array([centroid[0], centroid[1], look_height])
+
+    forward = target - eye
+    forward = forward / np.linalg.norm(forward)
+    world_up = np.array([0.0, 0.0, 1.0])
+    right = np.cross(forward, world_up)
+    if np.linalg.norm(right) < 1e-6:
+        right = np.array([1.0, 0.0, 0.0])
+    right = right / np.linalg.norm(right)
+    true_up = np.cross(right, forward)
+
+    # Trimesh/OpenGL-Kamerakonvention: Kamera blickt entlang der lokalen -Z-Achse.
+    transform = np.eye(4)
+    transform[:3, 0] = right
+    transform[:3, 1] = true_up
+    transform[:3, 2] = -forward
+    transform[:3, 3] = eye
+    return transform
+
+
 def export_glb(geometry: FloorPlanGeometry) -> bytes:
     scene = build_scene(geometry)
+    scene.apply_transform(_Z_UP_TO_Y_UP)
     buffer = io.BytesIO()
     scene.export(file_obj=buffer, file_type="glb")
     return buffer.getvalue()

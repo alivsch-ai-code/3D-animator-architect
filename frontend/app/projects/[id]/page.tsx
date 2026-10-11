@@ -183,7 +183,7 @@ export default function ProjectPage({
             }
           >
             {project.model_glb_path ? (
-              <TourViewer modelUrl={api.modelUrl(id)} />
+              <TourViewer modelUrl={api.modelUrl(id)} rooms={project.geometry?.rooms ?? []} />
             ) : (
               <p className="text-sm text-neutral-500">
                 Noch kein 3D-Modell erzeugt. Die Geometrie oben wird 1:1 (exakte Maße) in ein

@@ -17,6 +17,28 @@ from PIL import Image
 from app.core.config import get_settings
 
 
+def _apply_camera_pose(scene: trimesh.Scene, camera_pose: dict | None) -> None:
+    """Setzt die Kamera auf der (kopierten) Szene.
+
+    Bevorzugt eine explizite 4x4-Transform (siehe
+    geometry.py::interior_camera_transform - Innenraumperspektive statt
+    Aussenansicht). Ohne Transform faellt dies auf die alte
+    Aussenansicht-Orbit-Kamera zurueck (z.B. fuer Debug-/Uebersichtsbilder).
+    """
+    if not camera_pose:
+        return
+    transform = camera_pose.get("transform")
+    if transform is not None:
+        scene.camera_transform = transform
+        scene.camera.fov = (80, 60)
+        return
+    scene.set_camera(
+        angles=camera_pose.get("angles", (1.2, 0, 0)),
+        distance=camera_pose.get("distance", 10.0),
+        center=camera_pose.get("center", scene.centroid),
+    )
+
+
 class PhotorealRenderer(Protocol):
     """Erweiterungspunkt fuer produktionsreife Renderer.
 
@@ -42,12 +64,7 @@ class SimplePreviewRenderer:
     def render(self, scene: trimesh.Scene, camera_pose: dict | None = None, style_prompt: str = "") -> bytes:
         del style_prompt  # Preview-Renderer ignoriert Stilvorgaben bewusst
         scene_copy = scene.copy()
-        if camera_pose:
-            scene_copy.set_camera(
-                angles=camera_pose.get("angles", (1.2, 0, 0)),
-                distance=camera_pose.get("distance", 10.0),
-                center=camera_pose.get("center", scene_copy.centroid),
-            )
+        _apply_camera_pose(scene_copy, camera_pose)
         png_bytes = scene_copy.save_image(resolution=(1024, 768), visible=True)
         if png_bytes is None:
             # Kein Display/Offscreen-Renderer verfuegbar (z.B. headless ohne
@@ -82,12 +99,7 @@ class ReplicateDepthRenderer:
 
     def _render_depth_map(self, scene: trimesh.Scene, camera_pose: dict | None) -> bytes:
         scene_copy = scene.copy()
-        if camera_pose:
-            scene_copy.set_camera(
-                angles=camera_pose.get("angles", (1.2, 0, 0)),
-                distance=camera_pose.get("distance", 10.0),
-                center=camera_pose.get("center", scene_copy.centroid),
-            )
+        _apply_camera_pose(scene_copy, camera_pose)
         depth = scene_copy.save_image(resolution=(1024, 768), visible=True)
         if depth is None:
             raise RuntimeError(

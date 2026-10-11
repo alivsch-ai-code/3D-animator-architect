@@ -114,17 +114,22 @@ def get_model(project_id: str) -> FileResponse:
 
 
 @router.post("/{project_id}/render", response_model=Project)
-def render_preview(project_id: str, style_prompt: str = "") -> Project:
+def render_preview(project_id: str, style_prompt: str = "", room_id: str | None = None) -> Project:
     project = _get_or_404(project_id)
     if project.geometry is None:
         raise HTTPException(status_code=400, detail="Projekt hat noch keine geparste Geometrie")
 
-    from app.pipeline.geometry import build_scene
+    from app.pipeline.geometry import build_scene, interior_camera_transform, pick_main_room
 
     scene = build_scene(project.geometry)
+    room = pick_main_room(project.geometry, room_id=room_id)
+    if room is None:
+        raise HTTPException(status_code=400, detail="Keine Raeume in der Geometrie vorhanden")
+    camera_pose = {"transform": interior_camera_transform(room)}
+
     renderer = get_renderer()
     try:
-        png_bytes = renderer.render(scene, camera_pose={}, style_prompt=style_prompt)
+        png_bytes = renderer.render(scene, camera_pose=camera_pose, style_prompt=style_prompt)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"Rendering fehlgeschlagen: {exc}") from exc
 

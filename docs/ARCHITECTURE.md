@@ -101,12 +101,43 @@ frontend/
 
 | Komponente | Status |
 |---|---|
-| Claude-Vision-Parsing (Grundriss → strukturiertes JSON) | **Echt implementiert**, ruft die reale Anthropic-API |
+| Grundriss-Vision-Parsing (→ strukturiertes JSON) | **Echt implementiert und live getestet** (Claude Opus 4.6 über Replicate, siehe LLM-DECISION.md) |
 | Normen-Kontext-Injektion | **Echt implementiert** (lädt STANDARDS.md) |
-| Deterministischer 3D-Geometrie-Builder (GLB) | **Echt implementiert** (trimesh-Extrusion) |
-| 3D-Tour im Browser (begehbar) | **Echt implementiert** (react-three-fiber + PointerLockControls) |
-| Fotorealistisches Rendering | **Schnittstelle + einfacher Preview-Fallback implementiert.** Produktionsreifes Fotorealismus-Backend (SDXL/ControlNet oder Blender headless) muss noch angebunden werden — erfordert GPU-Infrastruktur, die in dieser Umgebung nicht verfügbar ist. Siehe `backend/app/pipeline/render.py` für den Erweiterungspunkt |
+| Deterministischer 3D-Geometrie-Builder (GLB) | **Echt implementiert**, inkl. korrekter Y-up-Achskonvertierung für glTF/three.js (siehe unten, Live-Testergebnis 2026-10-11: ohne diese Konvertierung stand das Modell "auf der Kante") |
+| 3D-Tour im Browser (begehbar) | **Echt implementiert**: react-three-fiber + PointerLockControls (WASD+Maus), Raycasting-Kollisionserkennung gegen Wände, automatischer Spawn im Hauptwohnraum, Raum-Teleport-Buttons. **Hinweis**: Kollisions-/Spawn-Logik ist durch Geometrie-Tests und Backend-seitige Screenshot-Verifikation abgesichert, aber noch nicht in einem echten Browser interaktiv durchgeklickt (kein Browser in der Entwicklungsumgebung verfügbar) |
+| Fotorealistisches Rendering (Innenraumansicht) | **Echt implementiert und live getestet** (Replicate FLUX.1 Depth, siehe LLM-DECISION.md). Kamera steht automatisch im Hauptwohnraum (`geometry.py::interior_camera_transform`), nicht mehr in einer Außenansicht des Gesamtgebäudes (Live-Testergebnis 2026-10-11: vorher wurde die Gebäude-Außenform von FLUX als Möbelstück interpretiert) |
 | IFC-Export | Nicht implementiert, Schema ist aber IFC-kompatibel angelegt (v2) |
+
+### Live-Testergebnis: Y-up/Z-up-Achsbug + Außenansicht-Kamera (2026-10-11)
+
+Ein Live-Test über die öffentliche Deployment-URL (echtes Smartphone, echter
+Browser) deckte zwei Bugs auf, die beide die Kernversprechen des Produkts
+direkt betrafen:
+
+1. **3D-Tour zeigte ein hochkant stehendes "Regal" statt eines Hauses.**
+   Ursache: `build_scene()` ist intern Z-up (Höhe = Z-Achse, Grundriss in der
+   XY-Ebene) — glTF/GLB verlangt laut Spezifikation aber Y-up. `trimesh`
+   konvertiert das beim Export nicht automatisch. Fix: `export_glb()`
+   rotiert die Szene vor dem Export um -90° um die X-Achse
+   (`geometry.py::_Z_UP_TO_Y_UP`). Verifiziert durch Bounds-Vergleich vor/nach
+   Export (Höhe lag danach korrekt auf der Y-Achse).
+2. **Fotorealistisches Rendering sah aus wie ein Schrank, nicht wie ein
+   Zimmer.** Ursache: Die Kamera für Depth-Map/Rendering nutzte eine
+   generische Außen-/Vogelperspektive auf das gesamte Gebäudevolumen — FLUX
+   interpretierte die kompakte Blockform als Möbelstück. Fix: neue
+   `geometry.py::interior_camera_transform()` platziert die Kamera auf
+   Augenhöhe (1,7m) nahe einer Raumecke, Blickrichtung zum Raumzentrum;
+   `geometry.py::pick_main_room()` wählt dafür automatisch den größten
+   "echten" Wohnraum (Wohnzimmer/Küche/Schlafzimmer/Bad, nicht Flur/Balkon/
+   offene Höfe). Live mit Replicate FLUX Depth verifiziert: Ergebnis zeigt
+   jetzt erkennbar ein Rauminneres mit Fenster, Tür, Bodenperspektive.
+
+Als Konsequenz aus Bug 1 wurde auch der Frontend-Tour-Viewer überarbeitet
+(`frontend/components/TourViewer.tsx`): Der begehbare Modus spawnt jetzt
+automatisch im selben "Hauptraum" (gleiche Auswahllogik wie serverseitig),
+statt an einer festen Außenposition zu starten, und besitzt eine
+Raycasting-Kollisionserkennung gegen Wände sowie Raum-Teleport-Buttons für
+einen geführten Rundgang.
 
 ## Live-Testergebnis: Modellwahl entscheidet stark über Geometrie-Qualität
 
