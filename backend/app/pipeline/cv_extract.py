@@ -247,24 +247,28 @@ def _has_door_swing(thin: np.ndarray, axis: str, c: float, a0: int, a1: int) -> 
     """Prueft auf einen Tuerschwenk-Bogen (Viertelkreis mit Radius = Lueckenbreite
     um eines der beiden Lueckenenden) - unterscheidet Tueren von offenen
     Durchgaengen und Fluren, die aehnlich breit sind."""
-    radius = a1 - a0
-    if radius < 5:
+    gap = a1 - a0
+    if gap < 5:
         return False
     h, w = thin.shape
     angles = np.linspace(0.15, np.pi / 2 - 0.15, 24)
     dilated = cv2.dilate(thin, np.ones((5, 5), np.uint8))
-    for hinge, toward in ((a0, 1), (a1, -1)):
-        for side in (-1, 1):
-            hits = 0
-            for theta in angles:
-                along = hinge + toward * radius * np.cos(theta)
-                across = c + side * radius * np.sin(theta)
-                px, py = (along, across) if axis == "h" else (across, along)
-                xi, yi = int(round(px)), int(round(py))
-                if 0 <= yi < h and 0 <= xi < w and dilated[yi, xi]:
-                    hits += 1
-            if hits / len(angles) >= 0.3:
-                return True
+    # Das Tuerblatt ist oft etwas laenger als die gemessene Lichte (Anschlag
+    # in der Leibung, Wandstummel neben der Zarge) - daher mehrere Radien;
+    # nie kleiner als die Lichte (sonst passen fremde Boegen in Fluren).
+    for radius in gap * np.array([1.0, 1.1, 1.2]):
+        for hinge, toward in ((a0, 1), (a1, -1)):
+            for side in (-1, 1):
+                hits = 0
+                for theta in angles:
+                    along = hinge + toward * radius * np.cos(theta)
+                    across = c + side * radius * np.sin(theta)
+                    px, py = (along, across) if axis == "h" else (across, along)
+                    xi, yi = int(round(px)), int(round(py))
+                    if 0 <= yi < h and 0 <= xi < w and dilated[yi, xi]:
+                        hits += 1
+                if hits / len(angles) >= 0.3:
+                    return True
     return False
 
 
@@ -279,11 +283,16 @@ def _gap_coverage(thin: np.ndarray, axis: str, c: float, t: float, a0: int, a1: 
     return float(region.any(axis=0).mean())
 
 
-def _cast_to_cross_wall(walls: np.ndarray, line: _Line, forward: bool, limit: int) -> int | None:
-    """Laeuft vom Linienende in Linienrichtung bis zur naechsten QUERwand und
-    gibt die Position direkt davor zurueck (oder None). Noetig fuer Luecken,
-    die an einer senkrechten Wand enden statt an einem gleichgerichteten
-    Wandstueck - typisch fuer Balkonbruestungen und Tueren in Raumecken."""
+def _cast_to_cross_wall(walls: np.ndarray, line: _Line, forward: bool, limit: int) -> tuple[int, int, int] | None:
+    """Laeuft vom Linienende in Linienrichtung bis zur naechsten QUERwand.
+
+    Gibt (Lueckenanfang, Lueckenende, Wandende) zurueck: Lueckenende = erstes Wandpixel nach
+    der Luecke, Wandende = Position der Querwand. Beide unterscheiden sich,
+    wenn vor der Querwand noch ein kurzes Wandstueck in derselben Flucht
+    liegt (z.B. Wandecke ueber einer Balkontuer, kuerzer als ein eigenes
+    Wandsegment) - das wird uebersprungen und der Linie zugeschlagen. Noetig
+    fuer Luecken, die an einer senkrechten Wand enden statt an einem
+    gleichgerichteten Wandstueck (Balkonbruestungen, Tueren in Raumecken)."""
     lo, hi = int(line.c - line.t / 2) + 1, int(line.c + line.t / 2)
     if hi <= lo:
         return None
@@ -292,20 +301,38 @@ def _cast_to_cross_wall(walls: np.ndarray, line: _Line, forward: bool, limit: in
     cross = walls.shape[0] if line.axis == "h" else walls.shape[1]
     start = line.a1 if forward else line.a0 - 1
     step = 1 if forward else -1
+
+    def band(pos: int) -> np.ndarray:
+        return walls[lo:hi, pos] if line.axis == "h" else walls[pos, lo:hi]
+
+    def is_cross(pos: int) -> bool:
+        before = walls[max(lo - reach, 0):lo, pos] if line.axis == "h" else walls[pos, max(lo - reach, 0):lo]
+        after = walls[hi:min(hi + reach, cross), pos] if line.axis == "h" else walls[pos, hi:min(hi + reach, cross)]
+        return before.mean() > 0.6 or after.mean() > 0.6
+
+    # Die Linie (aus der morphologischen Oeffnung) endet oft 1-2 px vor dem
+    # Rand der Rohmaske - diese Restpixel gehoeren noch zur Wand.
+    for _ in range(int(line.t)):
+        if 0 <= start < size and band(start).mean() >= 0.5:
+            start += step
+        else:
+            break
+    gap_start = start
     for i in range(limit):
         pos = start + step * i
         if pos < 0 or pos >= size:
             return None
-        band = walls[lo:hi, pos] if line.axis == "h" else walls[pos, lo:hi]
-        if band.mean() < 0.5:
+        if band(pos).mean() < 0.5:
             continue
-        # Querwand = Wandpixel reichen ueber das eigene Band hinaus; ein
-        # gleichgerichtetes Wandstueck wird schon beim Zusammenfuehren in
-        # _lines behandelt.
-        before = walls[max(lo - reach, 0):lo, pos] if line.axis == "h" else walls[pos, max(lo - reach, 0):lo]
-        after = walls[hi:min(hi + reach, cross), pos] if line.axis == "h" else walls[pos, hi:min(hi + reach, cross)]
-        if before.mean() > 0.6 or after.mean() > 0.6:
-            return pos if i >= 3 else None
+        if i < 3:
+            return None
+        gap_end = pos
+        for j in range(int(3 * line.t) + 10):
+            q = gap_end + step * j
+            if q < 0 or q >= size or band(q).mean() < 0.5:
+                return None
+            if is_cross(q):
+                return gap_start, gap_end, q
         return None
     return None
 
@@ -332,7 +359,8 @@ def _extend_ends(lines: list[_Line], walls: np.ndarray, thin: np.ndarray, marks:
             hit = _cast_to_cross_wall(walls, line, forward, int(gap_max))
             if hit is None:
                 continue
-            g0, g1 = (line.a1, hit) if forward else (hit + 1, line.a0)
+            gap_start, gap_end, wall_end = hit
+            g0, g1 = (gap_start, gap_end) if forward else (gap_end + 1, gap_start + 1)
             if g1 - g0 < 3:
                 continue
             # Am Linienende (Luecke bis zur Querwand) ist der Schwenkbogen Pflicht:
@@ -342,7 +370,7 @@ def _extend_ends(lines: list[_Line], walls: np.ndarray, thin: np.ndarray, marks:
                 continue
             line.gaps.append(_Gap(g0, g1, kind))
             line.gaps.sort(key=lambda g: g.a0)
-            line.a0, line.a1 = min(line.a0, g0), max(line.a1, g1)
+            line.a0, line.a1 = min(line.a0, g0, wall_end), max(line.a1, g1, wall_end + 1)
 
 
 def _lines(pieces: list[_Piece], thin: np.ndarray, marks: np.ndarray, door_max: float,

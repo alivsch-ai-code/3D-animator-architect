@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 
 from app.models.schemas import FloorPlanGeometry, Project, ProjectStatus
 from app.pipeline.convert import ensure_png
+from app.pipeline.cv_extract import refine_geometry_with_cv
 from app.pipeline.geometry import export_glb
 from app.pipeline.parser import get_parser
 from app.pipeline.redact import redact_pii
@@ -64,7 +65,15 @@ def _parse_with_retries(content: bytes, media_type: str) -> FloorPlanGeometry:
             time.sleep(2)
             continue
 
-        # derive_room_polygons() bewusst NICHT aufgerufen, siehe Docstring oben.
+        # Geometrie aus den Pixeln statt aus LLM-Koordinaten (siehe
+        # pipeline/cv_extract.py); faellt bei ungeeigneten Plaenen (None)
+        # auf die LLM-Geometrie zurueck.
+        try:
+            refined = refine_geometry_with_cv(content, geometry)
+        except Exception:  # noqa: BLE001 - Bildanalyse ist optional, nie blockierend
+            refined = None
+        if refined is not None:
+            geometry = refined
         overlap_flags = find_room_overlaps(geometry)
         if len(overlap_flags) < best_overlap_count:
             best_geometry, best_overlap_count = geometry, len(overlap_flags)

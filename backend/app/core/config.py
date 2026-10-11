@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     # "preview" (GPU-frei, kein API-Key, siehe render.py) | "replicate"
     render_provider: str = "preview"
     # FLUX.1 Depth [dev]: nimmt eine Depth-Map + Prompt, haelt Geometrie fest.
-    replicate_image_model: str = "black-forest-labs/flux-depth-dev"
+    replicate_image_model: str = "google/nano-banana"
 
     storage_dir: Path = BACKEND_DIR / "data"
     standards_doc_path: Path = REPO_ROOT / "docs" / "STANDARDS.md"

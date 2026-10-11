@@ -81,6 +81,42 @@ class SimplePreviewRenderer:
         return png_bytes
 
 
+_NANO_BANANA_INSTRUCTION = (
+    "Turn this simple 3D model render of an apartment room into a photorealistic "
+    "real estate interior photograph. Keep the exact camera position and angle, and "
+    "keep every wall, corner, window, door and opening exactly where it is with the "
+    "same size and proportions - do not add, remove or move any walls, windows or "
+    "doors. Replace the plain colored blocks with realistic furniture of the same "
+    "size and position, give walls, floor and ceiling realistic materials and add "
+    "natural lighting. Style: "
+)
+
+
+def _build_image_model_input(model_slug: str, render_png: bytes, render_file: io.BytesIO,
+                             style_prompt: str) -> dict:
+    """Eingabeschema je Bildmodell auf Replicate (Feldnamen und Arbeitsweise
+    unterscheiden sich): FLUX Depth/Canny konditionieren auf ein Steuerbild,
+    nano-banana (Gemini 2.5 Flash Image) ist ein Bild-BEARBEITUNGSmodell und
+    bekommt das geometrisch exakte Innenraum-Rendering plus Anweisung, die
+    Geometrie unveraendert zu lassen."""
+    if model_slug.startswith("google/nano-banana"):
+        import base64
+
+        data_uri = "data:image/png;base64," + base64.standard_b64encode(render_png).decode()
+        return {
+            "prompt": _NANO_BANANA_INSTRUCTION + style_prompt,
+            "image_input": [data_uri],
+            "aspect_ratio": "match_input_image",
+            "output_format": "png",
+        }
+    return {
+        "control_image": render_file,
+        "prompt": style_prompt,
+        "guidance": 10,
+        "num_inference_steps": 28,
+    }
+
+
 class ReplicateDepthRenderer:
     """Produktionsreifer Fotorealismus-Renderer via Replicate.
 
@@ -100,7 +136,8 @@ class ReplicateDepthRenderer:
         from app.pipeline.parser import _resolve_version_ref
 
         self._client = replicate_sdk.Client(api_token=api_token or settings.replicate_api_token)
-        self._model = _resolve_version_ref(self._client, model or settings.replicate_image_model)
+        self._model_slug = model or settings.replicate_image_model
+        self._model = _resolve_version_ref(self._client, self._model_slug)
 
     def _render_depth_map(self, scene: trimesh.Scene, camera_pose: dict | None) -> bytes:
         scene_copy = scene.copy()
@@ -135,16 +172,8 @@ class ReplicateDepthRenderer:
             "furniture and materials, natural daylight, sharp focus, "
             "DSLR photograph, 24mm wide-angle lens"
         )
-        full_prompt = base_prompt
-
         output = self._client.run(
-            self._model,
-            input={
-                "control_image": depth_file,
-                "prompt": full_prompt,
-                "guidance": 10,
-                "num_inference_steps": 28,
-            },
+            self._model, input=_build_image_model_input(self._model_slug, depth_png, depth_file, base_prompt)
         )
         result = output[0] if isinstance(output, list) else output
         if hasattr(result, "read"):
