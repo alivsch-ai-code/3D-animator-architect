@@ -161,6 +161,42 @@ Segmentierungsmodell, siehe Punkt 2 der Roadmap) nötig wird; Letzteres
 bleibt als Option für noch höhere Zuverlässigkeit bei komplexen Plänen
 relevant, ist aber nicht mehr die einzige Abhilfe.
 
+## Live-Testergebnis: Deterministische Raumpolygon-Ableitung (2026-10-11, experimentell)
+
+Ein Live-Bug zeigte: Der Parser generiert Wand- und Raumpolygon-Koordinaten
+weitgehend UNABHAENGIG voneinander - in einem Testfall wurde ein Balkon
+wiederholt (systematisch, nicht zufaellig) INNERHALB des Wohnzimmer-Polygons
+platziert statt ausserhalb der Fassade. Recherche (u.a. Raster-to-Vector/Liu
+et al. ICCV 2017, CubiCasa5K-eigene Ground-Truth-Pipeline, ein 2026er
+Floorplan-VLM-Paper das exakt dasselbe Problem beschreibt) bestaetigte den
+naheliegenden Loesungsansatz: Raumpolygone deterministisch als eingeschlossene
+Flaechen des Wand-Liniennetzes ableiten (`shapely.ops.polygonize`-Verfahren,
+implementiert in `backend/app/pipeline/topology.py::derive_room_polygons`)
+statt den separat vom LLM gelieferten Polygon-Koordinaten zu vertrauen - das
+garantiert *mathematisch* ueberlappungsfreie Raeume statt es nur zu erhoffen.
+
+**Status: Implementiert und getestet (`tests/test_topology.py`), aber
+bewusst NICHT in die Live-Pipeline eingebunden.** An echten, komplexen
+Plaenen (kurze Innenwaende, uneinheitliche Koordinatenkonventionen - z.B.
+startet eine Innenwand teils an der Wandmittellinie, teils an der Innenkante
+einer angrenzenden Aussenwand) erzeugte die Ableitung trotz mehrerer
+Sicherheitsnetze (Ueberlappungs-Check, Flaechen-Plausibilitaetspruefung,
+Gesamtflaechen-Drift-Check) teils plausibel aussehende, aber FALSCHE
+Raumgrenzen bei nicht direkt betroffenen Nachbarraeumen (ein Luecken-Leck an
+einer Wandverbindung liess zwei Raum-Voids teilweise verschmelzen, die
+Sicherheitsnetze griffen nicht zuverlaessig). Wird bewusst als bekannte
+Baustelle dokumentiert statt eine unfertige Loesung live zu schalten, die
+das Problem im Zweifel verschlimmbessert.
+
+**Naechste Schritte fuer eine produktionsreife Version** (siehe
+`topology.py`-Docstring fuer Details): Vertex-Snapping vor dem Puffern
+(`shapely.snap()`) statt pauschaler Linienverlaengerung, getrennte Innen-/
+Aussenkanten-Liniennetze statt Mittellinien-Puffer (vermeidet die
+Flaechen-Ungenauigkeit durch Wandstaerke), und/oder den Parser explizit
+anweisen, Wandkoordinaten konsistent auf dieselbe Referenz (Mittellinie) zu
+beziehen, um die Notwendigkeit von Toleranz-Heuristiken ueberhaupt zu
+reduzieren.
+
 ## Nächste Schritte (Roadmap)
 
 1. Render-Backend anbinden (Replicate/Stability-API für ControlNet, oder Blender-Worker).

@@ -30,6 +30,17 @@ def _parse_with_retries(content: bytes, media_type: str) -> FloorPlanGeometry:
        gesetzter Balkon) sind ein eindeutig erkennbarer Fehler, den ein
        erneuter Versuch oft behebt, da jeder Durchlauf leicht anders ausfaellt.
 
+    HINWEIS: topology.py::derive_room_polygons (deterministische Ableitung der
+    Raumpolygone aus dem Wandnetz statt den separat vom LLM gelieferten
+    Koordinaten zu vertrauen) ist implementiert und getestet, aber BEWUSST
+    NOCH NICHT hier eingebunden - an echten komplexen Plaenen (kurze/krumm
+    anschliessende Waende) erzeugte die Ableitung trotz mehrerer
+    Sicherheitsnetze (Ueberlappungs- und Flaechen-Plausibilitaetspruefung)
+    teils plausibel aussehende, aber FALSCHE Raumgrenzen - siehe
+    docs/ARCHITECTURE.md Live-Testergebnis. Bis die Heuristik zuverlaessiger
+    ist, bleibt es bei reiner Ueberlappungs-Erkennung (sichtbar, nicht
+    automatisch korrigiert).
+
     Begrenzt auf _MAX_PARSE_ATTEMPTS, um Kosten/Latenz kontrollierbar zu
     halten. Bleibt am Ende trotzdem ein Geometriefehler bestehen, wird er
     als compliance_flag sichtbar gemacht statt verschwiegen.
@@ -53,6 +64,7 @@ def _parse_with_retries(content: bytes, media_type: str) -> FloorPlanGeometry:
             time.sleep(2)
             continue
 
+        # derive_room_polygons() bewusst NICHT aufgerufen, siehe Docstring oben.
         overlap_flags = find_room_overlaps(geometry)
         if len(overlap_flags) < best_overlap_count:
             best_geometry, best_overlap_count = geometry, len(overlap_flags)
