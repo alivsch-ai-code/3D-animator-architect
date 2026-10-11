@@ -10,10 +10,25 @@ export default function UploadForm() {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!file || !name.trim()) return;
+    setAttempted(true);
+
+    if (!name.trim() && !file) {
+      setError("Bitte Projektname eingeben und einen Grundriss auswählen.");
+      return;
+    }
+    if (!name.trim()) {
+      setError("Bitte einen Projektnamen eingeben.");
+      return;
+    }
+    if (!file) {
+      setError("Bitte einen Grundriss (Bild oder PDF) auswählen.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
@@ -27,16 +42,20 @@ export default function UploadForm() {
     }
   }
 
+  const nameMissing = attempted && !name.trim();
+  const fileMissing = attempted && !file;
+
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-md">
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4 max-w-md">
       <div>
         <label className="block text-sm font-medium mb-1">Projektname</label>
         <input
-          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors"
+          className={`w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent transition-colors ${
+            nameMissing ? "border-red-400" : "border-neutral-300"
+          }`}
           placeholder="z.B. Musterstraße 12, 3-Zimmer-Wohnung"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          required
         />
       </div>
       <div>
@@ -45,14 +64,15 @@ export default function UploadForm() {
           type="file"
           accept="image/png,image/jpeg,image/webp,application/pdf"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="w-full text-sm"
-          required
+          className={`w-full text-sm rounded-md border p-1.5 ${
+            fileMissing ? "border-red-400" : "border-transparent"
+          }`}
         />
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button
         type="submit"
-        disabled={busy || !file || !name.trim()}
+        disabled={busy}
         className="rounded-md bg-accent text-white px-4 py-2.5 text-sm font-medium hover:opacity-90 transition-opacity disabled:opacity-40 inline-flex items-center justify-center gap-2"
       >
         {busy && (
