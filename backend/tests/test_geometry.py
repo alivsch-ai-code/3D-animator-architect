@@ -13,6 +13,7 @@ from app.models.schemas import (
 )
 from app.pipeline.geometry import (
     _assign_furniture_to_rooms,
+    _build_parsed_furniture_item,
     build_scene,
     export_glb,
     interior_camera_transform,
@@ -203,9 +204,43 @@ def test_parsed_furniture_is_not_misread_as_walls_and_overrides_generic_fallback
     assert len(geo.walls) == 0
 
     scene = build_scene(geo)
-    # 1 Boden + 1 echtes Moebel (NICHT die generische Waschtisch-Platzhalter-
-    # Moeblierung, die fuer RoomType.bathroom sonst greifen wuerde).
-    assert len(scene.geometry) == 2
+    # 1 Boden + mehrere zusammenpassende Teile der Badewanne (keine einzelne
+    # Box und NICHT die generische Waschtisch-Platzhalter-Moeblierung).
+    assert len(scene.geometry) == 4
+
+
+def test_parsed_bed_has_recognizable_structural_parts_within_plan_dimensions():
+    bed = FurnitureItem(
+        type=FurnitureType.bed,
+        center=Point2D(x=3.0, y=4.0),
+        width_m=1.8,
+        depth_m=2.0,
+        height_m=0.5,
+    )
+
+    meshes = _build_parsed_furniture_item(bed)
+
+    assert len(meshes) >= 5
+    bounds = [mesh.bounds for mesh in meshes]
+    assert min(bound[0][0] for bound in bounds) >= 3.0 - 0.9 - 0.02
+    assert max(bound[1][0] for bound in bounds) <= 3.0 + 0.9 + 0.02
+    assert min(bound[0][1] for bound in bounds) >= 4.0 - 1.0 - 0.02
+    assert max(bound[1][1] for bound in bounds) <= 4.0 + 1.0 + 0.02
+
+
+def test_parsed_sofa_is_not_exported_as_one_block():
+    sofa = FurnitureItem(
+        type=FurnitureType.sofa,
+        center=Point2D(x=1.5, y=2.0),
+        width_m=2.2,
+        depth_m=0.9,
+        height_m=0.8,
+    )
+
+    meshes = _build_parsed_furniture_item(sofa)
+
+    assert len(meshes) >= 8
+    assert all(mesh.is_watertight for mesh in meshes)
 
 
 def test_furniture_without_room_id_is_assigned_via_point_in_polygon():

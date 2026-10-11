@@ -58,7 +58,8 @@ export default function ProjectPage({
   }
 
   useEffect(() => {
-    refresh();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -105,6 +106,9 @@ export default function ProjectPage({
       </div>
     );
   }
+
+  const hasCriticalGeometryErrors =
+    project.geometry?.compliance_flags.some((flag) => flag.severity === "error") ?? false;
 
   return (
     <div className="min-h-screen">
@@ -182,12 +186,19 @@ export default function ProjectPage({
               </button>
             }
           >
+            {hasCriticalGeometryErrors && (
+              <p className="mb-3 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+                Die Geometrie enthält kritische Prüfhinweise. Das Modell ist nur eine
+                vorläufige Visualisierung und nicht als maßhaltige Darstellung geeignet.
+              </p>
+            )}
             {project.model_glb_path ? (
               <TourViewer modelUrl={api.modelUrl(id)} rooms={project.geometry?.rooms ?? []} />
             ) : (
               <p className="text-sm text-neutral-500">
-                Noch kein 3D-Modell erzeugt. Die Geometrie oben wird 1:1 (exakte Maße) in ein
-                begehbares 3D-Modell umgewandelt.
+                Noch kein 3D-Modell erzeugt. Aus den erkannten Wänden, Öffnungen und Räumen wird
+                eine schematische 3D-Vorschau aufgebaut. Bitte Geometrie-Prüfhinweise vor dem
+                Rundgang beachten.
               </p>
             )}
           </Section>

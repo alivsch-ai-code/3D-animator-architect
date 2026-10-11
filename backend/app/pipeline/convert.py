@@ -9,7 +9,7 @@ from __future__ import annotations
 import io
 
 import pymupdf
-from PIL import Image
+from PIL import Image, ImageOps
 
 PDF_RENDER_DPI = 200
 
@@ -33,7 +33,8 @@ def ensure_png(content: bytes, content_type: str | None, filename: str) -> tuple
         finally:
             doc.close()
 
-    image = Image.open(io.BytesIO(content)).convert("RGB")
+    with Image.open(io.BytesIO(content)) as source_image:
+        image = ImageOps.exif_transpose(source_image).convert("RGB")
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue(), "image/png"

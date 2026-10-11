@@ -28,16 +28,8 @@ from app.models.schemas import (
     Wall,
 )
 
-ROOM_COLORS: dict[RoomType, list[int]] = {
-    RoomType.living_room: [230, 210, 180, 255],
-    RoomType.bedroom: [200, 220, 230, 255],
-    RoomType.kitchen: [220, 230, 200, 255],
-    RoomType.bathroom: [210, 230, 230, 255],
-    RoomType.hallway: [225, 225, 215, 255],
-    RoomType.storage: [205, 205, 205, 255],
-    RoomType.balcony: [200, 215, 180, 255],
-    RoomType.other: [215, 215, 215, 255],
-}
+ROOM_FLOOR_COLOR = [194, 181, 163, 255]
+ROOM_COLORS: dict[RoomType, list[int]] = {room_type: ROOM_FLOOR_COLOR for room_type in RoomType}
 
 WALL_COLOR = [245, 245, 240, 255]
 WINDOW_GLASS_COLOR = [190, 215, 225, 255]
@@ -47,6 +39,10 @@ FURNITURE_WOOD = [140, 105, 72, 255]
 FURNITURE_UPHOLSTERY = [120, 130, 140, 255]
 FURNITURE_COUNTER = [225, 225, 222, 255]
 FURNITURE_SANITARY = [235, 238, 238, 255]
+FURNITURE_MATTRESS = [220, 211, 195, 255]
+FURNITURE_CUSHION = [177, 166, 150, 255]
+FURNITURE_DARK_WOOD = [92, 66, 45, 255]
+FURNITURE_METAL = [120, 126, 127, 255]
 
 FURNITURE_COLORS: dict[FurnitureType, list[int]] = {
     FurnitureType.bed: FURNITURE_WOOD,
@@ -228,7 +224,8 @@ def _build_room_floor(room: Room) -> trimesh.Trimesh | None:
     polygon_2d = Polygon(points)
     if not polygon_2d.is_valid or polygon_2d.area <= 1e-6:
         return None
-    mesh = trimesh.creation.extrude_polygon(polygon_2d, height=0.03)
+    mesh = trimesh.creation.extrude_polygon(polygon_2d, height=0.08)
+    mesh.apply_translation([0.0, 0.0, -0.04])
     mesh.visual.vertex_colors = ROOM_COLORS.get(room.type, ROOM_COLORS[RoomType.other])
     return mesh
 
@@ -272,12 +269,148 @@ def _assign_furniture_to_rooms(geometry: FloorPlanGeometry) -> dict[str, list[Fu
     return by_room
 
 
-def _build_parsed_furniture_item(item: FurnitureItem) -> trimesh.Trimesh:
+def _build_parsed_furniture_item(item: FurnitureItem) -> list[trimesh.Trimesh]:
+    """Build recognizable, scale-bounded furniture from the plan's symbols.
+
+    These meshes are intentionally deterministic and lightweight. They are a
+    substantial improvement over one colored cuboid per symbol, but are not a
+    substitute for licensed production furniture assets.
+    """
+    width = max(0.15, item.width_m)
+    depth = max(0.15, item.depth_m)
     height = item.height_m or _FURNITURE_DEFAULT_HEIGHT.get(item.type, 0.5)
-    color = FURNITURE_COLORS.get(item.type, FURNITURE_WOOD)
-    return _place_box(
-        item.center.x, item.center.y, item.width_m, item.depth_m, 0.0, height, color, item.rotation_deg
-    )
+    cos_a = math.cos(math.radians(item.rotation_deg))
+    sin_a = math.sin(math.radians(item.rotation_deg))
+    meshes: list[trimesh.Trimesh] = []
+
+    def add_box(
+        offset_x: float,
+        offset_y: float,
+        part_width: float,
+        part_depth: float,
+        z0: float,
+        z1: float,
+        color: list[int],
+    ) -> None:
+        center_x = item.center.x + offset_x * cos_a - offset_y * sin_a
+        center_y = item.center.y + offset_x * sin_a + offset_y * cos_a
+        meshes.append(
+            _place_box(
+                center_x,
+                center_y,
+                part_width,
+                part_depth,
+                z0,
+                z1,
+                color,
+                item.rotation_deg,
+            )
+        )
+
+    def add_ellipsoid(
+        offset_x: float,
+        offset_y: float,
+        center_z: float,
+        radii: tuple[float, float, float],
+        color: list[int],
+    ) -> None:
+        mesh = trimesh.creation.icosphere(subdivisions=2)
+        mesh.apply_scale(radii)
+        if item.rotation_deg:
+            mesh.apply_transform(
+                trimesh.transformations.rotation_matrix(
+                    math.radians(item.rotation_deg), [0, 0, 1]
+                )
+            )
+        mesh.apply_translation(
+            [
+                item.center.x + offset_x * cos_a - offset_y * sin_a,
+                item.center.y + offset_x * sin_a + offset_y * cos_a,
+                center_z,
+            ]
+        )
+        mesh.visual.vertex_colors = color
+        meshes.append(mesh)
+
+    if item.type == FurnitureType.bed:
+        frame_h = min(0.22, height * 0.42)
+        mattress_h = min(0.22, max(0.12, height - frame_h))
+        add_box(0, 0, width, depth, 0, frame_h, FURNITURE_DARK_WOOD)
+        add_box(0, 0, width * 0.96, depth * 0.94, frame_h, frame_h + mattress_h, FURNITURE_MATTRESS)
+        pillow_depth = min(0.36, depth * 0.22)
+        pillow_width = width * 0.34
+        for side in (-1, 1):
+            add_box(
+                side * width * 0.23,
+                depth * 0.32,
+                pillow_width,
+                pillow_depth,
+                frame_h + mattress_h,
+                frame_h + mattress_h + 0.07,
+                [238, 233, 222, 255],
+            )
+        add_box(0, depth * 0.48, width, 0.08, frame_h, min(height, frame_h + mattress_h + 0.35), FURNITURE_WOOD)
+    elif item.type == FurnitureType.sofa:
+        seat_h = min(0.42, height * 0.58)
+        arm_w = min(0.2, width * 0.12)
+        add_box(0, 0, width, depth, 0.12, seat_h, FURNITURE_DARK_WOOD)
+        cushion_count = 2 if width < 1.8 else 3
+        cushion_w = (width - 2 * arm_w) / cushion_count
+        for index in range(cushion_count):
+            x = -width / 2 + arm_w + cushion_w * (index + 0.5)
+            add_box(x, -depth * 0.12, cushion_w * 0.94, depth * 0.65, seat_h, seat_h + 0.1, FURNITURE_CUSHION)
+            add_box(x, depth * 0.28, cushion_w * 0.94, depth * 0.18, seat_h, height, FURNITURE_UPHOLSTERY)
+        for side in (-1, 1):
+            add_box(side * (width / 2 - arm_w / 2), 0, arm_w, depth, 0.12, height * 0.78, FURNITURE_UPHOLSTERY)
+    elif item.type == FurnitureType.kitchen_counter:
+        cabinet_h = min(0.78, height * 0.84)
+        add_box(0, 0, width, depth, 0.08, cabinet_h, FURNITURE_COUNTER)
+        add_box(0, 0, width * 1.03, depth * 1.08, cabinet_h, height, [205, 201, 193, 255])
+        count = max(2, min(4, round(width / 0.55)))
+        for index in range(count):
+            x = -width / 2 + width * (index + 0.5) / count
+            add_box(x, -depth / 2 - 0.006, width / count * 0.94, 0.012, 0.16, cabinet_h - 0.04, [213, 210, 203, 255])
+            add_box(x + width / count * 0.31, -depth / 2 - 0.025, 0.018, 0.025, cabinet_h * 0.55, cabinet_h * 0.69, FURNITURE_METAL)
+    elif item.type == FurnitureType.bathtub:
+        rim = min(0.09, min(width, depth) * 0.14)
+        base_h = min(0.48, height * 0.8)
+        add_box(0, 0, width * 0.94, depth * 0.92, 0, base_h, FURNITURE_SANITARY)
+        add_box(0, 0, width, depth, base_h, height, [246, 246, 242, 255])
+        add_box(0, 0, width - 2 * rim, depth - 2 * rim, base_h + 0.015, base_h + 0.03, [184, 202, 205, 255])
+    elif item.type == FurnitureType.toilet:
+        base_h = min(0.42, height * 0.72)
+        add_ellipsoid(0, -depth * 0.08, base_h * 0.62, (width * 0.48, depth * 0.36, base_h * 0.62), FURNITURE_SANITARY)
+        add_box(0, depth * 0.32, width * 0.82, depth * 0.28, base_h, height, FURNITURE_SANITARY)
+        add_ellipsoid(0, -depth * 0.08, base_h * 0.98, (width * 0.42, depth * 0.31, 0.035), [105, 110, 112, 255])
+    elif item.type == FurnitureType.sink:
+        cabinet_h = min(0.72, height * 0.82)
+        add_box(0, 0, width, depth, 0.05, cabinet_h, [205, 199, 190, 255])
+        add_box(0, 0, width * 1.04, depth * 1.05, cabinet_h, height, FURNITURE_SANITARY)
+        add_ellipsoid(0, 0, height + 0.005, (width * 0.34, depth * 0.3, 0.035), [200, 213, 214, 255])
+        add_box(0, depth * 0.34, 0.035, 0.035, height, height + 0.2, FURNITURE_METAL)
+    elif item.type == FurnitureType.wardrobe:
+        add_box(0, 0, width, depth, 0.04, height, FURNITURE_WOOD)
+        add_box(0, -depth / 2 - 0.008, width * 0.48, 0.016, 0.08, height - 0.04, [158, 125, 91, 255])
+        add_box(0, -depth / 2 - 0.03, 0.02, 0.025, height * 0.42, height * 0.56, FURNITURE_METAL)
+    elif item.type == FurnitureType.table:
+        top_h = min(0.76, height)
+        leg = max(0.045, min(width, depth) * 0.055)
+        add_box(0, 0, width, depth, top_h - 0.06, top_h, FURNITURE_WOOD)
+        for x in (-width * 0.42, width * 0.42):
+            for y in (-depth * 0.4, depth * 0.4):
+                add_box(x, y, leg, leg, 0, top_h - 0.06, FURNITURE_DARK_WOOD)
+    elif item.type == FurnitureType.chair:
+        seat_h = min(0.48, height * 0.68)
+        leg = max(0.035, min(width, depth) * 0.06)
+        add_box(0, 0, width, depth, seat_h - 0.06, seat_h, FURNITURE_WOOD)
+        add_box(0, depth * 0.4, width, leg, seat_h, height, FURNITURE_WOOD)
+        for x in (-width * 0.4, width * 0.4):
+            for y in (-depth * 0.38, depth * 0.38):
+                add_box(x, y, leg, leg, 0, seat_h - 0.06, FURNITURE_DARK_WOOD)
+    else:
+        add_box(0, 0, width, depth, 0, height, FURNITURE_COLORS.get(item.type, FURNITURE_WOOD))
+
+    return meshes
 
 
 def _build_furniture(room: Room) -> list[trimesh.Trimesh]:
@@ -349,7 +482,7 @@ def build_scene(geometry: FloorPlanGeometry) -> trimesh.Scene:
     for room in geometry.rooms:
         parsed_items = furniture_by_room.get(room.id, [])
         if parsed_items:
-            meshes = [_build_parsed_furniture_item(item) for item in parsed_items]
+            meshes = [mesh for item in parsed_items for mesh in _build_parsed_furniture_item(item)]
         else:
             meshes = _build_furniture(room)
         for i, item in enumerate(meshes):

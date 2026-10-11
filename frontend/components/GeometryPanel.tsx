@@ -7,6 +7,12 @@ const SEVERITY_STYLES: Record<string, string> = {
   info: "bg-blue-100 text-blue-800 border-blue-300",
 };
 
+const SEVERITY_LABELS: Record<string, string> = {
+  error: "Fehler",
+  warning: "Prüfen",
+  info: "Info",
+};
+
 export default function GeometryPanel({ geometry }: { geometry: FloorPlanGeometry }) {
   return (
     <div className="flex flex-col gap-4 text-sm">
@@ -84,7 +90,8 @@ export default function GeometryPanel({ geometry }: { geometry: FloorPlanGeometr
             Im Plan erkannte Möbel/Sanitärobjekte ({geometry.furniture.length})
           </h3>
           <p className="text-xs text-neutral-500 mb-2">
-            Werden 1:1 aus dem Grundriss übernommen statt generisch platziert.
+            Positionen und Maße stammen aus der Plananalyse; die 3D-Formen sind schematische
+            Visualisierungen.
           </p>
           <div className="flex flex-wrap gap-1.5">
             {geometry.furniture.map((item, i) => {
@@ -106,13 +113,22 @@ export default function GeometryPanel({ geometry }: { geometry: FloorPlanGeometr
       {geometry.compliance_flags.length > 0 && (
         <div>
           <h3 className="font-semibold mb-2">Hinweise & Normprüfung</h3>
+          {geometry.compliance_flags.some((flag) => flag.severity === "error") && (
+            <p className="mb-2 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800">
+              Kritische Geometriefehler gefunden. Das 3D-Modell wird nur als vorläufige
+              Visualisierung erzeugt und darf nicht als maßhaltige Darstellung verwendet werden.
+            </p>
+          )}
           <ul className="flex flex-col gap-2">
             {geometry.compliance_flags.map((flag, i) => (
               <li
                 key={i}
                 className={`border rounded-md px-3 py-2 ${SEVERITY_STYLES[flag.severity] ?? SEVERITY_STYLES.info}`}
               >
-                <span className="font-medium">{flag.standard}:</span> {flag.message}
+                <span className="font-medium">
+                  {SEVERITY_LABELS[flag.severity] ?? "Hinweis"} · {flag.standard}:
+                </span>{" "}
+                {flag.message}
               </li>
             ))}
           </ul>

@@ -98,9 +98,67 @@ VACE unterstützt Tiefenkarten-Konditionierung nativ, ist aber nicht als
 fertiges Replicate-Modell verfügbar — müsste selbst als Cog-Container
 paketiert werden (deutlich mehr Aufwand als Option oben).
 
+## 4. Live-Diagnose und aktueller Rework-Stand (2026-10-11)
+
+Der aktive Live-Fall wurde im Browser geprüft und der GLB separat vermessen.
+Das Modell hatte 56.9 KB und 83 Meshes. Die Wohnung war als farbiger
+Grundriss-Blockout mit flachen Farbflächen und Quader-Möbeln sichtbar; das war
+nicht „realistisch genug“. Im ursprünglichen Viewer zielte die Orbit-Kamera
+auf (0,0,0), obwohl die Raumpolygone über ungefähr 9.6 × 11.9 m verteilt
+waren. Zusätzlich legten ein unendliches Raster und ein extern geladenes HDRI
+technische Hilfsdarstellung über die Szene.
+
+Der Viewer berechnet seinen Überblick nun aus den Raum-Polygonen, zielt auf
+deren tatsächliche Mitte, entfernt das Raster und verwendet kein externes
+HDRI. Für den Walkthrough werden erkannte Möbel als proportionierte,
+typisierte Mesh-Gruppen (Bett, Sofa, Küche, Badobjekte) gebaut, nicht als
+einzelne farbige Box. Eingabe-Bilder werden vor der Analyse EXIF-orientiert.
+Die geometrische Prüfung vergleicht Plan- und Polygonflächen, erkennt
+ungültige Raumkonturen sowie falsche Wand-/Öffnungsmaße und zeigt kritische
+Fälle sichtbar als vorläufig.
+
+Die aktuelle Verbesserung hebt das Ergebnis aus dem besonders schlechten
+Blockout, macht es aber nicht fotorealistisch: Es gibt weiterhin keine
+produktionsreifen Möbel-GLB-Assets und keine PBR-Texturen. Ebenso ist die
+pixelbasierte CV-Extraktion nicht automatisch für jeden Plan geeignet.
+Sie wird nur als eigener Kandidat gegen die Parsergeometrie bewertet; die
+experimentelle Wandnetzableitung bleibt aus, bis sie auf annotierten echten
+Plänen nachweislich besser ist.
+
+**Qualitätsgrenze:** Der Live-Fall erfüllt den Benchmark unten noch nicht.
+Die nachfolgenden Maßnahmen sind technische Verbesserungen und Regression-
+Schutz, aber kein Beleg für vertriebsreife Fotorealistik. Vor Freigabe sind
+Browser-Sichtprüfung und annotierte Referenzpläne weiterhin erforderlich.
+
+## 5. Finaler Benchmark: „realistisch genug für Live-Walkthrough“
+
+Nicht alles, was im Browser "gut aussieht", ist für ein Immobilien-Listing ausreichend. Der Produkt-Benchmark sollte an echten Nutzer-Lesezeichen orientiert sein, nicht nur an technischen Render-Features:
+
+- Raumgefühl: Eine Person kann auf Anhieb einsehen, wo der Wohn-/Schlaf-/Essbereich liegt, ohne in einem Schachtelmodell zu navigieren.
+- Blickrichtung: Der Visitor muss im Übergang zwischen Räumen nicht abrupt in die Wand, auf den Boden oder in einen Balkon schauen.
+- Möbel-Silhouette: Sofas, Betten, Küchenelemente, Badmöbel und Tischbereiche sind als klar erkennbare reale Objekte lesbar.
+- Licht/Material: Holz, Fliesen, Stoff und Wände unterscheiden sich deutlich im Ton und in der Reflexion; keine flachen, blauen oder "Blockout"-Farben mehr.
+- Topologie: Räume sind nicht überlappt, richtig geschlossen und beim Wechsel zwischen Räumen orientierungsstabil.
+
+### Metrik / Qualitätsgrenze
+
+Ein Rundgang gilt als **„realistisch genug für Live-Walkthrough“**, wenn folgende Kriterien für die typische 2-4-Zimmer-Objektvorlage erfüllt sind:
+
+1. Keine Topologie-Fehlermeldungen bei validem Grundriss: `find_room_overlaps()` und die Polygon-Prüfungen liefern keine Fehler mehr.
+2. Die Startkamera landet immer innerhalb des Hauptraums, nicht im Zentrum der Gesamtfläche und nicht im Flur.
+3. Sichtbare Möbel-Silhouetten sind in jedem relevanten Raum klar erkennbar, nicht nur einzelne Boxen.
+4. Die Szene wirkt bei 10-20 Sekunden Rundgang nicht "leer" oder künstlich, sondern assoziiert mit einer echten Wohnung.
+5. Die Kamera und die Bewegung fühlen sich in der Praxis wie Innenraum statt wie 3D-Blockout an.
+
+Für den aktuellen Produkt-Stack ist dieser Benchmark **realistisch erreichbar**, ohne einen Full-Engine-Umstieg: Fertige 3D-Assets + bessere Licht-/Material-Palette + topologische Validierung reichen bereits für die nächste Qualitätsstufe.
+
 ## Empfohlene Reihenfolge
 
-1. Möbel-/Material-Asset-Bibliothek aufbauen + Platzierungslogik (größter Nutzen für das bestehende, bereits genutzte Feature)
-2. Licht/Postprocessing-Politur im Frontend
-3. Video-Rundgang-Experiment (eigenständiges neues Deliverable, günstig zu testen)
-4. Nur falls danach noch nötig: Lightmap-Baking für statische Elemente
+1. Parser/CV-Kandidaten anhand manuell annotierter Grundrisse validieren und die
+   Schwellenwerte so abstimmen, dass Fehler nicht als maßhaltige Geometrie
+   ausgegeben werden.
+2. Möbel-/Material-Asset-Bibliothek aufbauen und Platzierung in echten
+   Raumkonturen validieren (größter visueller Gewinn).
+3. Licht/Postprocessing-Politur im Frontend, erst nach echten Asset-Modellen.
+4. Video-Rundgang-Experiment (eigenständiges Deliverable).
+5. Nur falls danach nötig: Lightmap-Baking für statische Elemente.

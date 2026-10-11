@@ -197,16 +197,77 @@ anweisen, Wandkoordinaten konsistent auf dieselbe Referenz (Mittellinie) zu
 beziehen, um die Notwendigkeit von Toleranz-Heuristiken ueberhaupt zu
 reduzieren.
 
+## Live-Qualitätsdiagnose: Grundriss-/Modell-Rework (2026-10-11)
+
+Auf dem Live-Projekt `asdfa` (Projekt-ID `c213e9e4-0ca4-4024-bcce-93afc1c6593a`)
+wurde der schlechte Rundgang direkt im Browser untersucht. Das Bild bestätigt,
+dass es ein technischer Blockout und kein fotorealistischer Rundgang ist. Das
+heruntergeladene GLB war nur 56,900 Bytes groß und enthielt 83 einfache Meshes.
+Die aus dem Grundriss erkannten Möbel wurden jeweils als ein farbiger Quader
+gebaut; der Viewer zentrierte die Orbit-Kamera zudem am Weltursprung statt am
+Grundriss. Ein endloses Raster und ein zur Laufzeit extern geladenes HDRI
+verschlechterten den Eindruck bzw. machten die Darstellung von einem externen
+Host abhängig.
+
+Die Untersuchung der vorhandenen Geometrie zeigte einen tieferen Fehler:
+
+| Raum | Polygonfläche | Planfläche | Befund |
+|---|---:|---:|---|
+| Wohnzimmer | 18.41 m² | 27.79 m² | erhebliche Abweichung |
+| Balkon | 6.94 m² | 5.20 m² | erhebliche Abweichung |
+| Eltern | 20.78 m² | 16.76 m² | erhebliche Abweichung |
+| Kind | 12.49 m² | 14.59 m² | Abweichung |
+| Flur | ungültiges Polygon | 5.92 m² | ungültige Kontur |
+| Küche | 6.40 m² | 7.92 m² | Abweichung |
+| Bad | 9.65 m² | 5.61 m² | erhebliche Abweichung |
+
+Die vorherige Polygonprüfung ließ Flächenabweichungen bis zu 70 % als
+unauffällig durch. Sie wurde verschärft: symmetrische Abweichung bezogen auf
+die größere Fläche, über 20 % als Warnung und über 40 % als Fehler, sowie
+Prüfung ungültiger/zu kleiner Polygone, mehrfacher Raum-IDs und ungültiger
+Wand-/Öffnungsmaße. Bei der Modellerzeugung werden diese Prüfhinweise erneut
+aktualisiert und im Frontend als vorläufige, nicht maßhaltige Visualisierung
+gekennzeichnet.
+
+Die Pixel-CV-Extraktion wird als eigenständiger Geometriekandidat mit dem
+Parser-Ergebnis verglichen; sie darf das Parser-Ergebnis nicht allein aufgrund
+ihrer Existenz ersetzen. Die Wandnetz-Topologieableitung bleibt bis zu einem
+nachgewiesenen Benchmark an echten komplexen Grundrissen deaktiviert. Bei
+Flächenlabels, die Netto-/Wohnflächen darstellen, und Polygonkonturen gibt es
+legitime Abweichungen durch Wandstärken und Messkonventionen. Ein Fehler-Flag
+ist daher eine Prüfaufforderung, keine automatische Reparatur oder
+baurechtliche Aussage.
+
+Der Modell-Builder zerlegt erkannte Betten, Sofas, Küchenzeilen und
+Sanitärobjekte jetzt in maßbegrenzte, typgerechte Mesh-Teile, statt pro Symbol
+einen einzelnen Quader zu zeichnen. Das ist ein erkennbarer Fortschritt über
+den Blockout, aber ausdrücklich **keine** echte Asset-Bibliothek und kein
+fotorealistisches Möbelmodell. Für marketingfähige Qualität bleiben
+lizenzierte GLB-Assets und PBR-Materialien erforderlich. Der Viewer richtet
+die Übersicht an den Raumgrenzen aus, entfernt das störende Raster und
+verwendet kein extern nachzuladendes HDRI.
+
+Die Upload-Normalisierung korrigiert außerdem die EXIF-Orientierung von
+Rasterbildern vor der Pixelanalyse. Eingaben mit schlechter Auflösung,
+nicht lesbaren Labels oder nicht unterstützten Zeichnungsstilen bleiben eine
+Grenze der bestehenden CV-Heuristik. Ohne erfolgreiches Fixture-/Live-
+Benchmark wird die Rekonstruktion nicht als sicher korrigiert ausgewiesen.
+
 ## Nächste Schritte (Roadmap)
 
 > Für den realistischeren Rundgang (echte Möbel-Assets, Licht/Postprocessing,
 > KI-Video-Rundgang) siehe die ausführliche Recherche und Priorisierung in
 > [REALISTIC-WALKTHROUGH.md](REALISTIC-WALKTHROUGH.md).
 
-1. Render-Backend anbinden (Replicate/Stability-API für ControlNet, oder Blender-Worker).
-2. Spezialisiertes Segmentierungsmodell (CubiCasa5K-trainiert, z.B. RoomFormer) als
+1. Pixel-CV-Rekonstruktion und Parser-Kandidat an annotierten Plänen
+   benchmarken; Fehlerfälle als Fixtures festhalten, bevor CV breit zum
+   Standard wird.
+2. Lizenzierte, lokale Möbel-GLB-Bibliothek mit Maß-, Polycount- und
+   Lizenzmanifest integrieren; Platzierung gegen Raumkonturen validieren.
+3. Render-Backend anbinden (Replicate/Stability-API für ControlNet, oder Blender-Worker).
+4. Spezialisiertes Segmentierungsmodell (CubiCasa5K-trainiert, z.B. RoomFormer) als
    primäre Geometrie-Quelle statt/zusätzlich zu reiner LLM-Koordinatenextraktion
    (siehe Live-Testergebnis oben).
-3. Türöffnungen als echte Boolean-Cutouts statt Wandsegment-Lücken (bessere Fensterrahmen-Optik).
-4. Mehrgeschossige Gebäude (Treppen, Geschossstapelung — IFC `IfcBuildingStorey`).
-5. Echter IFC-Export für Übergabe an Architekturbüros/BIM-Tools.
+5. Türöffnungen als echte Boolean-Cutouts statt Wandsegment-Lücken (bessere Fensterrahmen-Optik).
+6. Mehrgeschossige Gebäude (Treppen, Geschossstapelung — IFC `IfcBuildingStorey`).
+7. Echter IFC-Export für Übergabe an Architekturbüros/BIM-Tools.

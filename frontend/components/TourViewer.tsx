@@ -2,7 +2,12 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Environment, Grid, OrbitControls, PointerLockControls, useGLTF } from "@react-three/drei";
+import {
+  ContactShadows,
+  OrbitControls,
+  PointerLockControls,
+  useGLTF,
+} from "@react-three/drei";
 import * as THREE from "three";
 import type { Room, RoomType } from "@/lib/types";
 import { ROOM_TYPE_LABELS } from "@/lib/types";
@@ -29,6 +34,37 @@ function pickMainRoom(rooms: Room[]): Room | null {
   return pool.reduce((best, r) => ((r.area_m2 ?? 0) > (best.area_m2 ?? 0) ? r : best), pool[0]);
 }
 
+function getOverviewView(rooms: Room[]): {
+  position: [number, number, number];
+  target: [number, number, number];
+} {
+  const points = rooms.flatMap((room) => room.polygon);
+  if (points.length === 0) {
+    return { position: [6, 8, 8], target: [0, 1, 0] };
+  }
+
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const width = Math.max(...xs) - Math.min(...xs);
+  const depth = Math.max(...ys) - Math.min(...ys);
+  const target: [number, number, number] = [
+    (Math.min(...xs) + Math.max(...xs)) / 2,
+    1.1,
+    -(Math.min(...ys) + Math.max(...ys)) / 2,
+  ];
+  const fovRadians = THREE.MathUtils.degToRad(60);
+  const distance = Math.max(width, depth) / (2 * Math.tan(fovRadians / 2)) * 1.25;
+
+  return {
+    position: [
+      target[0] + distance * 0.58,
+      target[1] + distance * 0.62,
+      target[2] + distance * 0.58,
+    ],
+    target,
+  };
+}
+
 function Model({ url }: { url: string }) {
   const { scene } = useGLTF(url);
   return <primitive object={scene} />;
@@ -47,13 +83,14 @@ function WalkControls({ enabled, spawn }: { enabled: boolean; spawn: THREE.Vecto
   const raycaster = useRef(new THREE.Raycaster());
   const spawnedRef = useRef(false);
 
-  useEffect(() => {
+  useFrame(() => {
     if (enabled && spawn && !spawnedRef.current) {
-      camera.position.copy(spawn);
+      camera.position.set(spawn.x, spawn.y, spawn.z);
+      camera.lookAt(spawn.x, EYE_HEIGHT, spawn.z + 1.5);
       spawnedRef.current = true;
     }
     if (!enabled) spawnedRef.current = false;
-  }, [enabled, spawn, camera]);
+  });
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => (keys.current[e.code] = true);
@@ -75,6 +112,9 @@ function WalkControls({ enabled, spawn }: { enabled: boolean; spawn: THREE.Vecto
     forward.y = 0;
     forward.normalize();
     const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+    if (!Number.isFinite(right.lengthSq()) || right.lengthSq() < 1e-6) {
+      return;
+    }
 
     if (keys.current["KeyW"]) moveDir.add(forward);
     if (keys.current["KeyS"]) moveDir.sub(forward);
@@ -104,9 +144,11 @@ function WalkControls({ enabled, spawn }: { enabled: boolean; spawn: THREE.Vecto
     const factorX = tryAxis(moveX);
     const factorZ = tryAxis(moveZ);
 
-    camera.position.x += moveX.x * factorX;
-    camera.position.z += moveZ.z * factorZ;
-    camera.position.y = EYE_HEIGHT;
+    const nextPosition = camera.position.clone();
+    nextPosition.x += moveX.x * factorX;
+    nextPosition.z += moveZ.z * factorZ;
+    nextPosition.y = EYE_HEIGHT;
+    camera.position.copy(nextPosition);
   });
 
   return enabled ? <PointerLockControls /> : null;
@@ -117,6 +159,7 @@ export default function TourViewer({ modelUrl, rooms = [] }: { modelUrl: string;
   const [spawn, setSpawn] = useState<THREE.Vector3 | null>(null);
 
   const mainRoom = useMemo(() => pickMainRoom(rooms), [rooms]);
+  const overviewView = useMemo(() => getOverviewView(rooms), [rooms]);
 
   function startWalking(room?: Room) {
     const target = room ?? mainRoom;
@@ -126,18 +169,29 @@ export default function TourViewer({ modelUrl, rooms = [] }: { modelUrl: string;
 
   return (
     <div className="relative w-full h-[520px] rounded-lg overflow-hidden border border-neutral-300 bg-neutral-100">
-      <Canvas camera={{ position: [6, 4, 6], fov: 60 }} shadows>
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[10, 10, 5]} intensity={1.2} castShadow />
+      <Canvas camera={{ position: overviewView.position, fov: 60 }} shadows dpr={[1, 2]}>
+        <color attach="background" args={["#f3f0eb"]} />
+        <hemisphereLight intensity={1.1} groundColor="#aaa49b" color="#f4f2ed" />
+        <directionalLight
+          position={[5, 12, 7]}
+          intensity={1.4}
+          castShadow
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+        />
         <Suspense fallback={null}>
           <Model url={modelUrl} />
-          <Environment preset="apartment" />
         </Suspense>
-        <Grid infiniteGrid fadeDistance={30} cellColor="#cccccc" sectionColor="#999999" />
+        <ContactShadows position={[0, -0.04, 0]} opacity={0.28} scale={20} blur={2.5} far={8} />
         {walking ? (
           <WalkControls enabled={walking} spawn={spawn} />
         ) : (
-          <OrbitControls makeDefault />
+          <OrbitControls
+            makeDefault
+            target={overviewView.target}
+            enableDamping
+            dampingFactor={0.08}
+          />
         )}
       </Canvas>
 

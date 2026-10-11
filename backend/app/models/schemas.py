@@ -25,10 +25,10 @@ class Opening(BaseModel):
     """Tür oder Fenster, als Position entlang einer Wand."""
 
     type: OpeningType
-    position_on_wall_m: float = Field(..., description="Abstand vom Wandanfang in Metern")
-    width_m: float
-    height_m: float
-    sill_height_m: float = Field(0.0, description="Brüstungshöhe, 0 für Türen")
+    position_on_wall_m: float = Field(..., ge=0, description="Abstand vom Wandanfang in Metern")
+    width_m: float = Field(..., gt=0)
+    height_m: float = Field(..., gt=0)
+    sill_height_m: float = Field(0.0, ge=0, description="Brüstungshöhe, 0 für Türen")
 
 
 class Wall(BaseModel):
@@ -37,8 +37,8 @@ class Wall(BaseModel):
     id: str
     start: Point2D
     end: Point2D
-    thickness_m: float
-    height_m: float = 2.5
+    thickness_m: float = Field(..., gt=0)
+    height_m: float = Field(2.5, gt=0)
     is_exterior: bool = False
     openings: list[Opening] = Field(default_factory=list)
 
@@ -71,9 +71,9 @@ class FurnitureItem(BaseModel):
     room_id: str | None = Field(None, description="ID des Raums, in dem das Moebel steht, falls zuordenbar")
     center: Point2D
     rotation_deg: float = Field(0.0, description="Rotation um die Hochachse, 0 = entlang X-Achse")
-    width_m: float
-    depth_m: float
-    height_m: float | None = Field(None, description="Falls nicht bekannt, nutzt geometry.py einen Typ-Default")
+    width_m: float = Field(..., gt=0)
+    depth_m: float = Field(..., gt=0)
+    height_m: float | None = Field(None, gt=0, description="Falls nicht bekannt, nutzt geometry.py einen Typ-Default")
 
 
 class RoomType(str, Enum):

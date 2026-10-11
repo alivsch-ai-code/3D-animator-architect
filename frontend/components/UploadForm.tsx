@@ -29,7 +29,6 @@ export default function UploadForm() {
   useEffect(() => {
     if (!busy) {
       if (intervalRef.current) clearInterval(intervalRef.current);
-      setStageIndex(0);
       return;
     }
     intervalRef.current = setInterval(() => {
@@ -57,6 +56,7 @@ export default function UploadForm() {
       return;
     }
 
+    setStageIndex(0);
     setBusy(true);
     setError(null);
     try {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 
 from fastapi import APIRouter, HTTPException, UploadFile
@@ -12,12 +13,20 @@ from app.pipeline.geometry import export_glb
 from app.pipeline.parser import get_parser
 from app.pipeline.redact import redact_pii
 from app.pipeline.render import get_renderer
-from app.pipeline.validate import find_room_overlaps
+from app.pipeline.validate import validate_room_topology
 from app.storage import project_store
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+logger = logging.getLogger(__name__)
 
 _MAX_PARSE_ATTEMPTS = 3
+_GEOMETRY_VALIDATION_STANDARDS = {
+    "Raum-Topologie",
+    "Wand-Topologie",
+    "Öffnungs-Topologie",
+    "Geometrie-Konsistenz",
+    "Möbel-Topologie",
+}
 
 
 def _parse_with_retries(content: bytes, media_type: str) -> FloorPlanGeometry:
@@ -31,16 +40,12 @@ def _parse_with_retries(content: bytes, media_type: str) -> FloorPlanGeometry:
        gesetzter Balkon) sind ein eindeutig erkennbarer Fehler, den ein
        erneuter Versuch oft behebt, da jeder Durchlauf leicht anders ausfaellt.
 
-    HINWEIS: topology.py::derive_room_polygons (deterministische Ableitung der
-    Raumpolygone aus dem Wandnetz statt den separat vom LLM gelieferten
-    Koordinaten zu vertrauen) ist implementiert und getestet, aber BEWUSST
-    NOCH NICHT hier eingebunden - an echten komplexen Plaenen (kurze/krumm
-    anschliessende Waende) erzeugte die Ableitung trotz mehrerer
-    Sicherheitsnetze (Ueberlappungs- und Flaechen-Plausibilitaetspruefung)
-    teils plausibel aussehende, aber FALSCHE Raumgrenzen - siehe
-    docs/ARCHITECTURE.md Live-Testergebnis. Bis die Heuristik zuverlaessiger
-    ist, bleibt es bei reiner Ueberlappungs-Erkennung (sichtbar, nicht
-    automatisch korrigiert).
+    Die Pixelrekonstruktion und die Parser-Geometrie werden als getrennte
+    Kandidaten bewertet; automatische Wandnetz-Topologieableitung bleibt
+    bewusst deaktiviert, weil sie an komplexen Plaenen falsch-positive
+    Raumgrenzen erzeugen kann. Geometriewarnungen werden sichtbar gespeichert
+    und koennen die Modell-Erzeugung als vorlaeufig kennzeichnen, statt
+    ungeprueft als masshaltig zu gelten.
 
     Begrenzt auf _MAX_PARSE_ATTEMPTS, um Kosten/Latenz kontrollierbar zu
     halten. Bleibt am Ende trotzdem ein Geometriefehler bestehen, wird er
@@ -48,8 +53,14 @@ def _parse_with_retries(content: bytes, media_type: str) -> FloorPlanGeometry:
     """
     parser = get_parser()
     best_geometry: FloorPlanGeometry | None = None
-    best_overlap_count = float("inf")
+    best_quality_score = float("inf")
     last_exc: Exception | None = None
+
+    def quality_score(geometry: FloorPlanGeometry) -> int:
+        return sum(
+            {"error": 100, "warning": 1}.get(flag.severity, 0)
+            for flag in validate_room_topology(geometry)
+        )
 
     for attempt in range(_MAX_PARSE_ATTEMPTS):
         try:
@@ -65,27 +76,39 @@ def _parse_with_retries(content: bytes, media_type: str) -> FloorPlanGeometry:
             time.sleep(2)
             continue
 
-        # Geometrie aus den Pixeln statt aus LLM-Koordinaten (siehe
-        # pipeline/cv_extract.py); faellt bei ungeeigneten Plaenen (None)
-        # auf die LLM-Geometrie zurueck.
+        # Die Pixelrekonstruktion ist eine unabhaengige Geometriehypothese.
+        # Sie ersetzt das Parser-Ergebnis nur, wenn sie die unabhaengigen
+        # Geometriepruefungen mindestens ebenso gut besteht.
+        candidates = [geometry]
         try:
             refined = refine_geometry_with_cv(content, geometry)
         except Exception:  # noqa: BLE001 - Bildanalyse ist optional, nie blockierend
+            logger.warning(
+                "Pixelbasierte Geometrieverfeinerung fehlgeschlagen; Parser-Geometrie bleibt Kandidat",
+                exc_info=True,
+            )
             refined = None
         if refined is not None:
-            geometry = refined
-        overlap_flags = find_room_overlaps(geometry)
-        if len(overlap_flags) < best_overlap_count:
-            best_geometry, best_overlap_count = geometry, len(overlap_flags)
-        if not overlap_flags:
+            candidates.insert(0, refined)
+        candidate = min(candidates, key=quality_score)
+        candidate_score = quality_score(candidate)
+        if candidate_score < best_quality_score:
+            best_geometry, best_quality_score = candidate, candidate_score
+        if not any(
+            flag.severity == "error" for flag in validate_room_topology(candidate)
+        ):
             break
 
     if best_geometry is None:
         raise last_exc if last_exc is not None else RuntimeError("Parsing fehlgeschlagen")
 
     best_geometry.compliance_flags = [
-        *best_geometry.compliance_flags,
-        *find_room_overlaps(best_geometry),
+        *[
+            flag
+            for flag in best_geometry.compliance_flags
+            if flag.standard not in _GEOMETRY_VALIDATION_STANDARDS
+        ],
+        *validate_room_topology(best_geometry),
     ]
     return best_geometry
 
@@ -180,6 +203,18 @@ def generate_model(project_id: str) -> Project:
     project = _get_or_404(project_id)
     if project.geometry is None:
         raise HTTPException(status_code=400, detail="Projekt hat noch keine geparste Geometrie")
+
+    geometry_flags = validate_room_topology(project.geometry)
+    project.geometry = project.geometry.model_copy(
+        update={
+            "compliance_flags": [
+                flag
+                for flag in project.geometry.compliance_flags
+                if flag.standard not in _GEOMETRY_VALIDATION_STANDARDS
+            ]
+            + geometry_flags
+        }
+    )
 
     try:
         glb_bytes = export_glb(project.geometry)
