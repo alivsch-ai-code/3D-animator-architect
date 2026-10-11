@@ -15,7 +15,7 @@ import numpy as np
 import trimesh
 from shapely.geometry import Polygon
 
-from app.models.schemas import FloorPlanGeometry, Room, RoomType, Wall
+from app.models.schemas import FloorPlanGeometry, Opening, OpeningType, Room, RoomType, Wall
 
 ROOM_COLORS: dict[RoomType, list[int]] = {
     RoomType.living_room: [230, 210, 180, 255],
@@ -29,7 +29,17 @@ ROOM_COLORS: dict[RoomType, list[int]] = {
 }
 
 WALL_COLOR = [245, 245, 240, 255]
-WINDOW_COLOR = [150, 200, 230, 120]
+WINDOW_GLASS_COLOR = [190, 215, 225, 255]
+WINDOW_FRAME_COLOR = [250, 250, 248, 255]
+DOOR_LEAF_COLOR = [150, 110, 75, 255]
+FURNITURE_WOOD = [140, 105, 72, 255]
+FURNITURE_UPHOLSTERY = [120, 130, 140, 255]
+FURNITURE_COUNTER = [225, 225, 222, 255]
+
+# Mindest-Innenmass (Breite/Tiefe in m), ab dem ein Raumtyp ueberhaupt
+# moebliert wird - verhindert, dass Moebel in zu kleinen/schmalen Raeumen
+# (z.B. Fehlinterpretationen des Parsers) mit den Waenden ueberlappen.
+_MIN_ROOM_FOR_FURNITURE = 1.6
 
 
 def _wall_direction(wall: Wall) -> tuple[np.ndarray, np.ndarray, float]:
@@ -66,15 +76,59 @@ def _box_between(
     return box
 
 
-def _build_wall_mesh(wall: Wall) -> list[trimesh.Trimesh]:
+def _build_door_leaf(p0: np.ndarray, p1: np.ndarray, opening: Opening) -> trimesh.Trimesh:
+    """Tuerblatt, am Anfang der Oeffnung angeschlagen und in den Raum geschwenkt
+    (fester Oeffnungswinkel) - macht die Tuer im Modell/Rendering als
+    tatsaechliches Objekt sichtbar statt nur als Wandluecke.
+    """
+    opening_vec = p1 - p0
+    width = float(np.linalg.norm(opening_vec)) or opening.width_m
+    wall_dir = opening_vec / width if width > 1e-6 else np.array([1.0, 0.0])
+
+    swing_angle = math.radians(62)
+    cos_a, sin_a = math.cos(swing_angle), math.sin(swing_angle)
+    # 2D-Rotation der Wandrichtung um den Anschlagpunkt p0.
+    leaf_dir = np.array(
+        [wall_dir[0] * cos_a - wall_dir[1] * sin_a, wall_dir[0] * sin_a + wall_dir[1] * cos_a]
+    )
+    leaf_width = width * 0.92
+    leaf_end = p0 + leaf_dir * leaf_width
+
+    leaf = _box_between(p0, leaf_end, thickness=0.04, z0=0.02, z1=opening.height_m, direction=leaf_dir)
+    leaf.visual.vertex_colors = DOOR_LEAF_COLOR
+    return leaf
+
+
+def _build_window_pane(p0: np.ndarray, p1: np.ndarray, wall: Wall, opening: Opening) -> list[trimesh.Trimesh]:
+    """Verglasung + Rahmen fuer eine Fensteroeffnung, mittig in der Wand."""
+    z0 = opening.sill_height_m
+    z1 = opening.sill_height_m + opening.height_m
+    _, direction, _ = _wall_direction(wall)
+
+    frame = _box_between(p0, p1, thickness=wall.thickness_m * 0.9, z0=z0, z1=z1, direction=direction)
+    frame.visual.vertex_colors = WINDOW_FRAME_COLOR
+
+    inset = np.maximum((p1 - p0) * 0.04, np.zeros(2))
+    glass = _box_between(
+        p0 + inset, p1 - inset, thickness=wall.thickness_m * 0.3, z0=z0 + 0.05, z1=z1 - 0.05, direction=direction
+    )
+    glass.visual.vertex_colors = WINDOW_GLASS_COLOR
+    return [frame, glass]
+
+
+def _build_wall_mesh(wall: Wall) -> tuple[list[trimesh.Trimesh], list[trimesh.Trimesh]]:
     """Extrudiert eine Wand, mit echten Luecken an Tuer-/Fensterpositionen.
 
     Oeffnungen werden als Segment-Unterteilung umgesetzt: Tueren erzeugen eine
     volle Luecke (Boden bis Oeffnungshoehe), Fenster erzeugen eine Luecke nur
-    im Brüstungs-/Sturzbereich; der Rest der Wand bleibt massiv.
+    im Brüstungs-/Sturzbereich; der Rest der Wand bleibt massiv. Zusaetzlich
+    werden sichtbare Tuerblaetter/Fensterverglasungen erzeugt (zweiter
+    Rueckgabewert), statt die Oeffnung nur als leere Luecke zu zeigen -
+    sonst wirkt das Modell/Rendering leer und nicht "kundenzeigbar".
     """
     start, direction, length = _wall_direction(wall)
     pieces: list[trimesh.Trimesh] = []
+    extras: list[trimesh.Trimesh] = []
 
     # Segmentgrenzen entlang der Wand sammeln (Opening-Start/-Ende), sortiert.
     cuts = sorted(
@@ -103,6 +157,12 @@ def _build_wall_mesh(wall: Wall) -> list[trimesh.Trimesh]:
             pieces.append(
                 _box_between(p0, p1, wall.thickness_m, lintel_bottom, wall.height_m, direction)
             )
+
+        if opening.type == OpeningType.door:
+            extras.append(_build_door_leaf(p0, p1, opening))
+        else:
+            extras.extend(_build_window_pane(p0, p1, wall, opening))
+
         cursor = seg_end
 
     if cursor < length - 1e-6:
@@ -117,7 +177,7 @@ def _build_wall_mesh(wall: Wall) -> list[trimesh.Trimesh]:
 
     for piece in pieces:
         piece.visual.vertex_colors = WALL_COLOR
-    return pieces
+    return pieces, extras
 
 
 def _build_room_floor(room: Room) -> trimesh.Trimesh | None:
@@ -132,12 +192,84 @@ def _build_room_floor(room: Room) -> trimesh.Trimesh | None:
     return mesh
 
 
+def _room_bbox(room: Room) -> tuple[float, float, float, float]:
+    xs = [p.x for p in room.polygon]
+    ys = [p.y for p in room.polygon]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _place_box(cx: float, cy: float, w: float, d: float, z0: float, z1: float, color: list[int]) -> trimesh.Trimesh:
+    box = trimesh.creation.box(extents=[w, d, max(z1 - z0, 1e-3)])
+    box.apply_translation([cx, cy, (z0 + z1) / 2.0])
+    box.visual.vertex_colors = color
+    return box
+
+
+def _build_furniture(room: Room) -> list[trimesh.Trimesh]:
+    """Einfache, box-basierte Platzhaltermoebel pro Raumtyp.
+
+    Bewusst grobe Blockout-Geometrie, keine detaillierten Modelle (siehe
+    docs/ARCHITECTURE.md) - der Zweck ist zweifach: (1) die begehbare Tour
+    wirkt nicht leer/unverkaeuflich, (2) die Depth-Map fuers fotorealistische
+    Rendering (render.py) bekommt dadurch echte Moebel-Silhouetten an der
+    richtigen Stelle statt eines leeren Raums, den FLUX sonst frei
+    "halluzinieren" muesste.
+
+    Platzierung ist heuristisch (Bounding-Box-basiert, gegen die "Suedwand"
+    = min-Y-Kante), nicht an die tatsaechliche Raumform angepasst - fuer
+    ueberwiegend rechteckige Raeume (Regelfall) ausreichend plausibel.
+    """
+    minx, miny, maxx, maxy = _room_bbox(room)
+    width, depth = maxx - minx, maxy - miny
+    if min(width, depth) < _MIN_ROOM_FOR_FURNITURE:
+        return []
+
+    margin = 0.15
+    cx = (minx + maxx) / 2.0
+    pieces: list[trimesh.Trimesh] = []
+
+    if room.type == RoomType.bedroom:
+        bed_w, bed_d, bed_h = min(1.6, width - 2 * margin), min(2.0, depth * 0.6), 0.5
+        bed_cy = miny + margin + bed_d / 2.0
+        pieces.append(_place_box(cx, bed_cy, bed_w, bed_d, 0.0, bed_h, FURNITURE_WOOD))
+        if width - bed_w > 0.7:
+            nightstand_cx = cx + bed_w / 2.0 + 0.3
+            pieces.append(_place_box(nightstand_cx, bed_cy, 0.4, 0.4, 0.0, 0.5, FURNITURE_WOOD))
+
+    elif room.type == RoomType.living_room:
+        sofa_w, sofa_d, sofa_h = min(2.0, width - 2 * margin), 0.85, 0.75
+        sofa_cy = miny + margin + sofa_d / 2.0
+        pieces.append(_place_box(cx, sofa_cy, sofa_w, sofa_d, 0.0, sofa_h, FURNITURE_UPHOLSTERY))
+        table_cy = sofa_cy + sofa_d / 2.0 + 0.6
+        if table_cy + 0.3 < maxy - margin:
+            pieces.append(_place_box(cx, table_cy, 1.0, 0.5, 0.0, 0.4, FURNITURE_WOOD))
+
+    elif room.type == RoomType.kitchen:
+        counter_w = min(width - 2 * margin, 3.0)
+        counter_cy = miny + margin + 0.3
+        pieces.append(_place_box(cx, counter_cy, counter_w, 0.6, 0.0, 0.9, FURNITURE_COUNTER))
+
+    elif room.type == RoomType.bathroom:
+        vanity_cx = minx + margin + 0.3
+        vanity_cy = miny + margin + 0.225
+        pieces.append(_place_box(vanity_cx, vanity_cy, 0.6, 0.45, 0.0, 0.85, FURNITURE_COUNTER))
+
+    return pieces
+
+
 def build_scene(geometry: FloorPlanGeometry) -> trimesh.Scene:
     scene = trimesh.Scene()
 
     for wall in geometry.walls:
-        for i, piece in enumerate(_build_wall_mesh(wall)):
+        pieces, extras = _build_wall_mesh(wall)
+        for i, piece in enumerate(pieces):
             scene.add_geometry(piece, node_name=f"wall_{wall.id}_{i}")
+        for i, extra in enumerate(extras):
+            scene.add_geometry(extra, node_name=f"opening_{wall.id}_{i}")
+
+    for room in geometry.rooms:
+        for i, item in enumerate(_build_furniture(room)):
+            scene.add_geometry(item, node_name=f"furniture_{room.id}_{i}")
 
     for room in geometry.rooms:
         floor = _build_room_floor(room)
@@ -212,7 +344,7 @@ def interior_camera_transform(
     to_center = centroid - corner
     norm = np.linalg.norm(to_center)
     direction = to_center / norm if norm > 1e-6 else np.array([1.0, 0.0])
-    eye_xy = corner + direction * min(0.9, norm * 0.3)
+    eye_xy = corner + direction * min(1.1, norm * 0.35)
 
     eye = np.array([eye_xy[0], eye_xy[1], eye_height])
     target = np.array([centroid[0], centroid[1], look_height])

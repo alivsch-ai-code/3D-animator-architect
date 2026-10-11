@@ -38,6 +38,7 @@ pydantic_core==2.50.0
 pyglet==1.5.31
 Pygments==2.21.0
 pymupdf==1.28.2
+pytesseract==0.3.13
 pytest==9.1.1
 python-dotenv==1.2.4
 python-multipart==0.0.32

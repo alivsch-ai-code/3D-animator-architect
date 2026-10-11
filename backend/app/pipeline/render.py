@@ -30,7 +30,12 @@ def _apply_camera_pose(scene: trimesh.Scene, camera_pose: dict | None) -> None:
     transform = camera_pose.get("transform")
     if transform is not None:
         scene.camera_transform = transform
-        scene.camera.fov = (80, 60)
+        # Realistisches Weitwinkel-Objektiv (ca. 24mm Kleinbild-Aequivalent)
+        # statt extremem 80 Grad-FOV - vorher fuehrte der sehr weite Winkel
+        # zu uebertriebener, "schwankender" Fluchtlinien-Verzerrung am Boden
+        # (siehe docs/ARCHITECTURE.md Live-Testergebnis: Nutzer-Feedback
+        # "Rendering sieht aus wie ein Schrank").
+        scene.camera.fov = (68, 52)
         return
     scene.set_camera(
         angles=camera_pose.get("angles", (1.2, 0, 0)),
@@ -118,7 +123,12 @@ class ReplicateDepthRenderer:
             self._model,
             input={
                 "control_image": depth_file,
-                "prompt": style_prompt or "photorealistic interior, natural daylight, 35mm lens",
+                "prompt": style_prompt
+                or (
+                    "professional real estate interior photography, realistic "
+                    "furniture and materials, natural daylight, sharp focus, "
+                    "architectural magazine quality, 24mm wide-angle lens"
+                ),
                 "guidance": 10,
                 "num_inference_steps": 28,
             },

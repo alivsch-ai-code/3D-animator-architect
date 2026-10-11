@@ -1,8 +1,20 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+
+// Es gibt keinen echten Fortschritts-Stream vom Backend (waere SSE/WebSocket,
+// siehe docs/ARCHITECTURE.md Roadmap) - diese Stufen laufen rein zeitbasiert
+// durch und sollen dem Nutzer nur zeigen, DASS etwas passiert (Analyse kann
+// 30-90s dauern), nicht einen exakten Fortschritt vortaeuschen.
+const PROGRESS_STAGES = [
+  { label: "Datei wird hochgeladen…", pct: 10 },
+  { label: "Personenbezogene Daten werden geschwärzt…", pct: 25 },
+  { label: "Grundriss wird analysiert (Wände, Türen, Räume)…", pct: 45 },
+  { label: "Maße gegen Bau-/Zeichnungsnormen geprüft…", pct: 70 },
+  { label: "Ergebnis wird aufbereitet…", pct: 88 },
+];
 
 export default function UploadForm() {
   const router = useRouter();
@@ -11,6 +23,22 @@ export default function UploadForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attempted, setAttempted] = useState(false);
+  const [stageIndex, setStageIndex] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!busy) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      setStageIndex(0);
+      return;
+    }
+    intervalRef.current = setInterval(() => {
+      setStageIndex((i) => Math.min(i + 1, PROGRESS_STAGES.length - 1));
+    }, 2800);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [busy]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,13 +65,13 @@ export default function UploadForm() {
       router.push(`/projects/${project.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unbekannter Fehler");
-    } finally {
       setBusy(false);
     }
   }
 
   const nameMissing = attempted && !name.trim();
   const fileMissing = attempted && !file;
+  const stage = PROGRESS_STAGES[stageIndex];
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4 max-w-md">
@@ -56,6 +84,7 @@ export default function UploadForm() {
           placeholder="z.B. Musterstraße 12, 3-Zimmer-Wohnung"
           value={name}
           onChange={(e) => setName(e.target.value)}
+          disabled={busy}
         />
       </div>
       <div>
@@ -64,12 +93,29 @@ export default function UploadForm() {
           type="file"
           accept="image/png,image/jpeg,image/webp,application/pdf"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          disabled={busy}
           className={`w-full text-sm rounded-md border p-1.5 ${
             fileMissing ? "border-red-400" : "border-transparent"
           }`}
         />
+        <p className="text-xs text-neutral-400 mt-1">
+          Namen/Adressen in Schriftfeldern werden automatisch geschwärzt, bevor etwas gespeichert wird.
+        </p>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
+
+      {busy && (
+        <div className="flex flex-col gap-1.5">
+          <div className="h-1.5 w-full rounded-full bg-neutral-200 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-accent transition-all duration-700 ease-out"
+              style={{ width: `${stage.pct}%` }}
+            />
+          </div>
+          <p className="text-xs text-neutral-500">{stage.label}</p>
+        </div>
+      )}
+
       <button
         type="submit"
         disabled={busy}

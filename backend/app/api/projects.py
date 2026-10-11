@@ -7,6 +7,7 @@ from app.models.schemas import FloorPlanGeometry, Project, ProjectStatus
 from app.pipeline.convert import ensure_png
 from app.pipeline.geometry import export_glb
 from app.pipeline.parser import get_parser
+from app.pipeline.redact import redact_pii
 from app.pipeline.render import get_renderer
 from app.storage import project_store
 
@@ -47,13 +48,26 @@ async def upload_floorplan(project_id: str, file: UploadFile) -> Project:
         png_content, media_type = ensure_png(raw_content, file.content_type, original_filename)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=f"Datei konnte nicht gelesen werden: {exc}") from exc
+    del raw_content  # Original-Bytes ab hier nicht mehr verwenden (siehe redact.py)
+
+    try:
+        # DSGVO/Datenschutz: Grundriss-Schriftfelder enthalten oft Namen/
+        # Adressen/Kontaktdaten (Architekt, Bauherr/Eigentuemer). Schwaerzung
+        # erfolgt VOR jeder Speicherung und VOR dem Parser-Aufruf - das
+        # unredigierte Bild wird an keiner Stelle persistiert oder an einen
+        # externen Parser-Provider geschickt. Siehe pipeline/redact.py fuer
+        # die Methode und ihre (dokumentierten) Grenzen.
+        redacted_content = redact_pii(png_content)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"PII-Schwärzung fehlgeschlagen: {exc}") from exc
+    del png_content  # unredigiertes PNG ab hier nicht mehr verwenden
 
     filename = f"{original_filename.rsplit('.', 1)[0]}.png"
-    project_store.save_floorplan_upload(project_id, filename, png_content)
+    project_store.save_floorplan_upload(project_id, filename, redacted_content)
 
     try:
         parser = get_parser()
-        geometry = parser.parse_floorplan(png_content, media_type=media_type)
+        geometry = parser.parse_floorplan(redacted_content, media_type=media_type)
     except Exception as exc:  # noqa: BLE001 - dem Nutzer den konkreten Parsing-Fehler zeigen
         project.status = ProjectStatus.failed
         project_store.save_project(project)

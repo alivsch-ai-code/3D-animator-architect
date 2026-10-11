@@ -72,11 +72,16 @@ def _sample_geometry() -> FloorPlanGeometry:
 
 def test_build_scene_produces_expected_piece_count():
     scene = build_scene(_sample_geometry())
-    # w1 (Tuer, sill=0): vor+nach Tuer + Sturz = 3
-    # w2 (Fenster): vor+nach + Sockel + Sturz = 4
+    # w1 (Tuer, sill=0): vor+nach Tuer + Sturz = 3, + 1 Tuerblatt
+    # w2 (Fenster): vor+nach + Sockel + Sturz = 4, + Rahmen+Glas = 2
     # w3, w4: je 1 (keine Oeffnung)
     # + 1 Bodenplatte
-    assert len(scene.geometry) == 3 + 4 + 1 + 1 + 1
+    # + Wohnzimmer-Moebel (Sofa + Couchtisch, Raum ist 5x4m)
+    wall_pieces = 3 + 4 + 1 + 1
+    opening_extras = 1 + 2
+    floor = 1
+    furniture = 2
+    assert len(scene.geometry) == wall_pieces + opening_extras + floor + furniture
 
 
 def test_export_glb_roundtrips():
@@ -86,7 +91,7 @@ def test_export_glb_roundtrips():
     assert len(glb_bytes) > 0
 
     reloaded = trimesh.load(trimesh.util.wrap_as_stream(glb_bytes), file_type="glb")
-    assert len(reloaded.geometry) == 10
+    assert len(reloaded.geometry) == 9 + 3 + 1 + 2
 
 
 def test_wall_without_openings_is_single_box():
