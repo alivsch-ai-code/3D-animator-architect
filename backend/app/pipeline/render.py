@@ -119,16 +119,29 @@ class ReplicateDepthRenderer:
         depth_png = self._render_depth_map(scene, camera_pose)
         depth_file = io.BytesIO(depth_png)
 
+        # Live-Test (2026-10-11): "architectural magazine quality" im Prompt
+        # fuehrte zuverlaessig zu halluzinierten Pseudo-Text-/Logo-Artefakten
+        # (FLUX assoziiert "magazine" mit Cover-Typografie/Schlagzeilen aus
+        # den Trainingsdaten). Ein nachtraeglich ergaenztes "no text, no
+        # watermark, no logo" im Hauptprompt hat das NICHT behoben, sondern
+        # tendenziell verschlimmert - FLUX.1 Depth [dev] hat kein echtes
+        # negative_prompt-Feld, daher wirkt eine Verneinung im Positiv-Prompt
+        # nicht als Ausschluss, sondern aktiviert eher die genannten Begriffe
+        # (bekanntes Diffusionsmodell-Verhalten). Fix: "magazine" entfernt,
+        # keine Verneinungen mehr im Prompt - nur noch neutrale
+        # Fotografie-Begriffe ohne Editorial-/Typografie-Assoziation.
+        base_prompt = style_prompt or (
+            "professional real estate interior photography, realistic "
+            "furniture and materials, natural daylight, sharp focus, "
+            "DSLR photograph, 24mm wide-angle lens"
+        )
+        full_prompt = base_prompt
+
         output = self._client.run(
             self._model,
             input={
                 "control_image": depth_file,
-                "prompt": style_prompt
-                or (
-                    "professional real estate interior photography, realistic "
-                    "furniture and materials, natural daylight, sharp focus, "
-                    "architectural magazine quality, 24mm wide-angle lens"
-                ),
+                "prompt": full_prompt,
                 "guidance": 10,
                 "num_inference_steps": 28,
             },

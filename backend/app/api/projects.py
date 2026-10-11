@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
@@ -9,9 +11,62 @@ from app.pipeline.geometry import export_glb
 from app.pipeline.parser import get_parser
 from app.pipeline.redact import redact_pii
 from app.pipeline.render import get_renderer
+from app.pipeline.validate import find_room_overlaps
 from app.storage import project_store
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+
+_MAX_PARSE_ATTEMPTS = 3
+
+
+def _parse_with_retries(content: bytes, media_type: str) -> FloorPlanGeometry:
+    """Ruft den Parser mit Retries auf - aus zwei unabhaengigen Gruenden:
+
+    1. Transiente Infrastrukturfehler (z.B. Replicate-Deployment-Timeouts bei
+       komplexen Plaenen mit vielen Raeumen/Moebeln) sind retriable, keine
+       Code-Fehler.
+    2. Das Parsing ist nicht deterministisch (siehe FINDINGS.md) - sich
+       ueberlappende Raeume (z.B. ein faelschlich ins Gebaeudeinnere
+       gesetzter Balkon) sind ein eindeutig erkennbarer Fehler, den ein
+       erneuter Versuch oft behebt, da jeder Durchlauf leicht anders ausfaellt.
+
+    Begrenzt auf _MAX_PARSE_ATTEMPTS, um Kosten/Latenz kontrollierbar zu
+    halten. Bleibt am Ende trotzdem ein Geometriefehler bestehen, wird er
+    als compliance_flag sichtbar gemacht statt verschwiegen.
+    """
+    parser = get_parser()
+    best_geometry: FloorPlanGeometry | None = None
+    best_overlap_count = float("inf")
+    last_exc: Exception | None = None
+
+    for attempt in range(_MAX_PARSE_ATTEMPTS):
+        try:
+            geometry = parser.parse_floorplan(content, media_type=media_type)
+        except Exception as exc:  # noqa: BLE001 - transiente Fehler retryen, sonst weiterreichen
+            last_exc = exc
+            is_last_attempt = attempt == _MAX_PARSE_ATTEMPTS - 1
+            # Nur abbrechen, wenn wir noch GAR kein brauchbares Ergebnis haben
+            # - ein frueherer erfolgreicher Versuch soll nicht wegen eines
+            # transienten Fehlers im letzten Retry verworfen werden.
+            if is_last_attempt or best_geometry is not None:
+                break
+            time.sleep(2)
+            continue
+
+        overlap_flags = find_room_overlaps(geometry)
+        if len(overlap_flags) < best_overlap_count:
+            best_geometry, best_overlap_count = geometry, len(overlap_flags)
+        if not overlap_flags:
+            break
+
+    if best_geometry is None:
+        raise last_exc if last_exc is not None else RuntimeError("Parsing fehlgeschlagen")
+
+    best_geometry.compliance_flags = [
+        *best_geometry.compliance_flags,
+        *find_room_overlaps(best_geometry),
+    ]
+    return best_geometry
 
 
 def _get_or_404(project_id: str) -> Project:
@@ -66,8 +121,7 @@ async def upload_floorplan(project_id: str, file: UploadFile) -> Project:
     project_store.save_floorplan_upload(project_id, filename, redacted_content)
 
     try:
-        parser = get_parser()
-        geometry = parser.parse_floorplan(redacted_content, media_type=media_type)
+        geometry = _parse_with_retries(redacted_content, media_type)
     except Exception as exc:  # noqa: BLE001 - dem Nutzer den konkreten Parsing-Fehler zeigen
         project.status = ProjectStatus.failed
         project_store.save_project(project)

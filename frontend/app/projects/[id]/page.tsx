@@ -45,7 +45,7 @@ export default function ProjectPage({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"model" | "render" | null>(null);
   const [stylePrompt, setStylePrompt] = useState(
-    "professional real estate interior photography, realistic furniture and materials, natural daylight, sharp focus, architectural magazine quality",
+    "professional real estate interior photography, realistic furniture and materials, natural daylight, sharp focus, DSLR photograph, 24mm wide-angle lens",
   );
 
   async function refresh() {
