@@ -1,5 +1,5 @@
 import type { FloorPlanGeometry } from "@/lib/types";
-import { ROOM_TYPE_LABELS } from "@/lib/types";
+import { FURNITURE_TYPE_LABELS, ROOM_TYPE_LABELS } from "@/lib/types";
 
 const SEVERITY_STYLES: Record<string, string> = {
   error: "bg-red-100 text-red-800 border-red-300",
@@ -77,6 +77,31 @@ export default function GeometryPanel({ geometry }: { geometry: FloorPlanGeometr
           </tbody>
         </table>
       </div>
+
+      {geometry.furniture.length > 0 && (
+        <div>
+          <h3 className="font-semibold mb-2">
+            Im Plan erkannte Möbel/Sanitärobjekte ({geometry.furniture.length})
+          </h3>
+          <p className="text-xs text-neutral-500 mb-2">
+            Werden 1:1 aus dem Grundriss übernommen statt generisch platziert.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {geometry.furniture.map((item, i) => {
+              const room = geometry.rooms.find((r) => r.id === item.room_id);
+              return (
+                <span
+                  key={i}
+                  className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-700"
+                >
+                  {FURNITURE_TYPE_LABELS[item.type]}
+                  {room ? ` · ${room.name}` : ""}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {geometry.compliance_flags.length > 0 && (
         <div>

@@ -2,6 +2,8 @@ import pytest
 
 from app.models.schemas import (
     FloorPlanGeometry,
+    FurnitureItem,
+    FurnitureType,
     Opening,
     OpeningType,
     Point2D,
@@ -10,6 +12,7 @@ from app.models.schemas import (
     Wall,
 )
 from app.pipeline.geometry import (
+    _assign_furniture_to_rooms,
     build_scene,
     export_glb,
     interior_camera_transform,
@@ -171,3 +174,57 @@ def test_interior_camera_transform_is_inside_room_at_eye_height():
     assert eye[2] == pytest.approx(1.6)
     assert 0 <= eye[0] <= 5
     assert 0 <= eye[1] <= 4
+
+
+def test_parsed_furniture_is_not_misread_as_walls_and_overrides_generic_fallback():
+    """Regressionstest fuer den Nutzer-gemeldeten Bug: im Quellplan bereits
+    eingezeichnete Moebel (z.B. Badewanne) duerfen nicht als Wandsegmente
+    landen, sondern als eigene furniture-Eintraege - und sollen die
+    generische Platzhalter-Moeblierung fuer diesen Raum ersetzen.
+    """
+    room = Room(
+        id="bad1",
+        name="Bad",
+        type=RoomType.bathroom,
+        polygon=[Point2D(x=0, y=0), Point2D(x=3, y=0), Point2D(x=3, y=3), Point2D(x=0, y=3)],
+        area_m2=9.0,
+    )
+    bathtub = FurnitureItem(
+        type=FurnitureType.bathtub,
+        room_id="bad1",
+        center=Point2D(x=0.8, y=0.4),
+        rotation_deg=0.0,
+        width_m=1.7,
+        depth_m=0.75,
+    )
+    geo = FloorPlanGeometry(walls=[], rooms=[room], furniture=[bathtub])
+
+    # Keine zusaetzlichen Waende durch das Moebelstueck.
+    assert len(geo.walls) == 0
+
+    scene = build_scene(geo)
+    # 1 Boden + 1 echtes Moebel (NICHT die generische Waschtisch-Platzhalter-
+    # Moeblierung, die fuer RoomType.bathroom sonst greifen wuerde).
+    assert len(scene.geometry) == 2
+
+
+def test_furniture_without_room_id_is_assigned_via_point_in_polygon():
+    room = Room(
+        id="r1",
+        name="Wohnzimmer",
+        type=RoomType.living_room,
+        polygon=[Point2D(x=0, y=0), Point2D(x=5, y=0), Point2D(x=5, y=4), Point2D(x=0, y=4)],
+        area_m2=20.0,
+    )
+    sofa = FurnitureItem(
+        type=FurnitureType.sofa,
+        room_id=None,
+        center=Point2D(x=2.5, y=0.6),
+        rotation_deg=0.0,
+        width_m=2.0,
+        depth_m=0.85,
+    )
+    geo = FloorPlanGeometry(walls=[], rooms=[room], furniture=[sofa])
+
+    assignment = _assign_furniture_to_rooms(geo)
+    assert assignment["r1"] == [sofa]

@@ -42,6 +42,19 @@ vorhanden sind). Wenn ein Mass unsicher ist, nutze eine plausible Schaetzung \
 gemaess der unten stehenden Referenz und vermerke die Unsicherheit in source_notes \
 statt zu raten und es als sicher auszugeben.
 
+Sehr wichtig - Moebel/Sanitaerobjekte sind KEINE Waende: Viele Grundrisse \
+(v.a. Makler-Exposés) zeigen bereits eingezeichnete Moebel- und \
+Sanitaersymbole (Sofa, Bett, Esstisch+Stuehle, Kuechenzeile mit Herd/Spuele, \
+Badewanne, Dusche, WC, Waschbecken, Schrank). Diese Symbole duerfen NIEMALS \
+als Wandsegmente in "walls" landen, auch wenn ihre Umrisslinien im Bild wie \
+duenne Striche aussehen - das erzeugt sonst falsche, "schwebende" Waende an \
+Moebelpositionen im 3D-Modell. Erkennst du ein Moebel-/Sanitaersymbol, trage \
+es stattdessen als eigenen Eintrag in "furniture" ein (Typ, Mittelpunkt, \
+Rotation in Grad, Breite/Tiefe in Metern, zugehoerige room_id falls \
+erkennbar). Ist "furniture" leer, wird spaeter automatisch generisch \
+moebliert - lieber ein Symbol korrekt als Moebel erfassen, als es als Wand \
+misszuinterpretieren oder komplett wegzulassen.
+
 Sehr wichtig - Relevanzfilter bei Mehrfamilienhaus-/Geschossplaenen: Zeigt \
 der Plan ein ganzes Stockwerk mit mehreren Wohneinheiten und/oder \
 Gemeinschaftsflaechen (Treppenhaus, Flur ausserhalb der Wohnung, \
@@ -103,6 +116,17 @@ entspricht (keine Erklaerungen, kein Markdown, kein Codeblock):
       "type": "living_room" | "bedroom" | "kitchen" | "bathroom" | "hallway" | "storage" | "balcony" | "other",
       "polygon": [{{"x": float, "y": float}}, ...],
       "area_m2": float oder null
+    }}
+  ],
+  "furniture": [
+    {{
+      "type": "bed" | "sofa" | "table" | "chair" | "wardrobe" | "kitchen_counter" | "sink" | "bathtub" | "shower" | "toilet" | "other",
+      "room_id": "string oder null",
+      "center": {{"x": float, "y": float}},
+      "rotation_deg": float,
+      "width_m": float,
+      "depth_m": float,
+      "height_m": float oder null
     }}
   ],
   "compliance_flags": [

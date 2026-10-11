@@ -44,6 +44,29 @@ export interface Room {
   area_m2: number | null;
 }
 
+export type FurnitureType =
+  | "bed"
+  | "sofa"
+  | "table"
+  | "chair"
+  | "wardrobe"
+  | "kitchen_counter"
+  | "sink"
+  | "bathtub"
+  | "shower"
+  | "toilet"
+  | "other";
+
+export interface FurnitureItem {
+  type: FurnitureType;
+  room_id: string | null;
+  center: Point2D;
+  rotation_deg: number;
+  width_m: number;
+  depth_m: number;
+  height_m: number | null;
+}
+
 export interface ComplianceFlag {
   severity: "info" | "warning" | "error";
   standard: string;
@@ -55,9 +78,24 @@ export interface FloorPlanGeometry {
   scale_hint: string | null;
   walls: Wall[];
   rooms: Room[];
+  furniture: FurnitureItem[];
   compliance_flags: ComplianceFlag[];
   source_notes: string | null;
 }
+
+export const FURNITURE_TYPE_LABELS: Record<FurnitureType, string> = {
+  bed: "Bett",
+  sofa: "Sofa",
+  table: "Tisch",
+  chair: "Stuhl",
+  wardrobe: "Schrank",
+  kitchen_counter: "Küchenzeile",
+  sink: "Waschbecken",
+  bathtub: "Badewanne",
+  shower: "Dusche",
+  toilet: "WC",
+  other: "Sonstiges",
+};
 
 export type ProjectStatus =
   | "created"

@@ -13,9 +13,20 @@ import math
 
 import numpy as np
 import trimesh
+from shapely.geometry import Point as ShapelyPoint
 from shapely.geometry import Polygon
 
-from app.models.schemas import FloorPlanGeometry, Opening, OpeningType, Room, RoomType, Wall
+from app.models.schemas import (
+    FloorPlanGeometry,
+    FurnitureItem,
+    FurnitureType,
+    Opening,
+    OpeningType,
+    Point2D,
+    Room,
+    RoomType,
+    Wall,
+)
 
 ROOM_COLORS: dict[RoomType, list[int]] = {
     RoomType.living_room: [230, 210, 180, 255],
@@ -35,6 +46,36 @@ DOOR_LEAF_COLOR = [150, 110, 75, 255]
 FURNITURE_WOOD = [140, 105, 72, 255]
 FURNITURE_UPHOLSTERY = [120, 130, 140, 255]
 FURNITURE_COUNTER = [225, 225, 222, 255]
+FURNITURE_SANITARY = [235, 238, 238, 255]
+
+FURNITURE_COLORS: dict[FurnitureType, list[int]] = {
+    FurnitureType.bed: FURNITURE_WOOD,
+    FurnitureType.sofa: FURNITURE_UPHOLSTERY,
+    FurnitureType.table: FURNITURE_WOOD,
+    FurnitureType.chair: FURNITURE_WOOD,
+    FurnitureType.wardrobe: FURNITURE_WOOD,
+    FurnitureType.kitchen_counter: FURNITURE_COUNTER,
+    FurnitureType.sink: FURNITURE_SANITARY,
+    FurnitureType.bathtub: FURNITURE_SANITARY,
+    FurnitureType.shower: FURNITURE_SANITARY,
+    FurnitureType.toilet: FURNITURE_SANITARY,
+    FurnitureType.other: FURNITURE_WOOD,
+}
+
+# Default-Hoehe (m) je Moebeltyp, falls der Parser keine height_m liefert.
+_FURNITURE_DEFAULT_HEIGHT: dict[FurnitureType, float] = {
+    FurnitureType.bed: 0.5,
+    FurnitureType.sofa: 0.75,
+    FurnitureType.table: 0.4,
+    FurnitureType.chair: 0.45,
+    FurnitureType.wardrobe: 1.9,
+    FurnitureType.kitchen_counter: 0.9,
+    FurnitureType.sink: 0.85,
+    FurnitureType.bathtub: 0.5,
+    FurnitureType.shower: 0.1,
+    FurnitureType.toilet: 0.4,
+    FurnitureType.other: 0.5,
+}
 
 # Mindest-Innenmass (Breite/Tiefe in m), ab dem ein Raumtyp ueberhaupt
 # moebliert wird - verhindert, dass Moebel in zu kleinen/schmalen Raeumen
@@ -198,11 +239,45 @@ def _room_bbox(room: Room) -> tuple[float, float, float, float]:
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def _place_box(cx: float, cy: float, w: float, d: float, z0: float, z1: float, color: list[int]) -> trimesh.Trimesh:
+def _place_box(
+    cx: float, cy: float, w: float, d: float, z0: float, z1: float, color: list[int], rotation_deg: float = 0.0
+) -> trimesh.Trimesh:
     box = trimesh.creation.box(extents=[w, d, max(z1 - z0, 1e-3)])
+    if rotation_deg:
+        box.apply_transform(trimesh.transformations.rotation_matrix(math.radians(rotation_deg), [0, 0, 1]))
     box.apply_translation([cx, cy, (z0 + z1) / 2.0])
     box.visual.vertex_colors = color
     return box
+
+
+def _point_in_polygon(point: Point2D, polygon: list[Point2D]) -> bool:
+    return Polygon([(p.x, p.y) for p in polygon]).contains(ShapelyPoint(point.x, point.y))
+
+
+def _assign_furniture_to_rooms(geometry: FloorPlanGeometry) -> dict[str, list[FurnitureItem]]:
+    """Ordnet geparste Moebel-Items (parser.py::FurnitureItem) ihren Raeumen zu.
+
+    Nutzt room_id, falls vom Parser gesetzt, sonst einen Punkt-in-Polygon-Test
+    gegen die Raumpolygone als Fallback.
+    """
+    by_room: dict[str, list[FurnitureItem]] = {room.id: [] for room in geometry.rooms}
+    for item in geometry.furniture:
+        if item.room_id and item.room_id in by_room:
+            by_room[item.room_id].append(item)
+            continue
+        for room in geometry.rooms:
+            if _point_in_polygon(item.center, room.polygon):
+                by_room[room.id].append(item)
+                break
+    return by_room
+
+
+def _build_parsed_furniture_item(item: FurnitureItem) -> trimesh.Trimesh:
+    height = item.height_m or _FURNITURE_DEFAULT_HEIGHT.get(item.type, 0.5)
+    color = FURNITURE_COLORS.get(item.type, FURNITURE_WOOD)
+    return _place_box(
+        item.center.x, item.center.y, item.width_m, item.depth_m, 0.0, height, color, item.rotation_deg
+    )
 
 
 def _build_furniture(room: Room) -> list[trimesh.Trimesh]:
@@ -267,8 +342,17 @@ def build_scene(geometry: FloorPlanGeometry) -> trimesh.Scene:
         for i, extra in enumerate(extras):
             scene.add_geometry(extra, node_name=f"opening_{wall.id}_{i}")
 
+    # Echte, im Quellplan eingezeichnete Moebel (falls vom Parser erkannt)
+    # haben Vorrang vor der generischen Platzhalter-Moeblierung pro Raum -
+    # nur Raeume ohne zugeordnete Parser-Moebel bekommen den Fallback.
+    furniture_by_room = _assign_furniture_to_rooms(geometry)
     for room in geometry.rooms:
-        for i, item in enumerate(_build_furniture(room)):
+        parsed_items = furniture_by_room.get(room.id, [])
+        if parsed_items:
+            meshes = [_build_parsed_furniture_item(item) for item in parsed_items]
+        else:
+            meshes = _build_furniture(room)
+        for i, item in enumerate(meshes):
             scene.add_geometry(item, node_name=f"furniture_{room.id}_{i}")
 
     for room in geometry.rooms:
