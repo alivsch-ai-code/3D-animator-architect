@@ -1,5 +1,15 @@
 # Modellentscheidung: Welches LLM arbeitet im Hintergrund?
 
+> **Update 2026-10-11 nach Live-Vergleichstest**: Ursprünglich war die Empfehlung,
+> Claude Opus 5 direkt über einen eigenen Anthropic-Key anzubinden. Ein
+> Live-Vergleich mehrerer auf Replicate gehosteter Modelle
+> (`backend/tests/fixtures/floorplans/model_comparison/`) zeigt: **Replicate
+> hostet Claude (und Gemini) selbst als Endpunkte** — ein einziger
+> Replicate-Token reicht damit für Parsing UND Rendering, kein separater
+> Anthropic-/Google-Key nötig. Empfohlener Standard ist jetzt
+> `anthropic/claude-opus-4.6` über `PARSER_PROVIDER=replicate`. Details siehe
+> "Implementierte Provider-Alternativen" unten.
+
 ## Kernaussage zuerst
 
 Ein LLM ist **nicht** die Bildgenerierungs-Engine dieses Produkts. Die Wettbewerbsanalyse
@@ -42,9 +52,11 @@ Auf expliziten Wunsch sind zwei weitere Backends real implementiert, nicht nur d
 
 | Provider | `PARSER_PROVIDER` | Modell | Status | Einschätzung |
 |---|---|---|---|---|
-| **Claude (Standard/Empfehlung)** | `claude` | `claude-opus-5` | **Implementiert, mangels Testkey noch nicht live verifiziert** | Siehe oben — beste Wahl für die eigentliche Geometrie-Extraktion |
-| **Google Gemini** | `gemini` | `gemini-3-pro` (per `GEMINI_PARSER_MODEL` konfigurierbar) | **Implementiert, mangels Testkey noch nicht live verifiziert** | Gleicher Prompt/Schema, eigener `GEMINI_API_KEY`. Sinnvoll als Kostenvergleich oder wenn bereits ein Gemini-Kontingent vorhanden ist. **Hinweis**: Google ändert Modell-IDs regelmäßig — vor Produktivbetrieb gegen die aktuelle AI-Studio-Modellliste prüfen |
-| **Replicate (offenes Vision-LLM)** | `replicate` | `lucataco/qwen3-vl-8b-instruct` (per `REPLICATE_PARSER_MODEL` konfigurierbar) | ✅ **Live getestet (2026-10-11)**, siehe `backend/README.md` und `backend/tests/fixtures/floorplans/FINDINGS.md` | Funktioniert end-to-end (API-Pipeline, Compliance-Flags), aber Tests mit echten Grundrissen (nicht nur dem einfachen Erstbeispiel) zeigen: **Bei maßlosen oder komplexen Plänen liefert es keine echte pixelgenaue Geometrie** — teils identische Platzhalter-Raumgrößen statt gemessener Proportionen, teils leere Ergebnisse durch Output-Token-Limits (4096 Hardcap). Textinhalte (Labels, Flächenangaben, Maßstab) werden zuverlässig gelesen. **Für produktionsreife Maßtreue ist Claude Opus 5 (oder ein dediziertes Segmentierungsmodell, siehe ARCHITECTURE.md Roadmap) nötig** — Replicate eignet sich für einfache, gut bemaßte Pläne oder als Kosten-Fallback, nicht als alleinige Geometriequelle |
+| **Replicate mit Claude Opus 4.6 (Standard/Empfehlung)** | `replicate` | `anthropic/claude-opus-4.6` (per `REPLICATE_PARSER_MODEL`) | ✅ **Live getestet (2026-10-11)**, siehe `backend/tests/fixtures/floorplans/model_comparison/README.md` | Im direkten Vergleich am echten, maßlosen Grundriss klar das beste Ergebnis: deutlich unterschiedliche, plausible Raumgrößen statt Platzhalter-Raster, erkennbare Gebäudeform. ~52s Laufzeit, API-Pricing (kein teures GPU-Zeit-Billing). **Läuft über den ohnehin vorhandenen Replicate-Token — kein separater Anthropic-Key nötig** |
+| Claude direkt über Anthropic-API | `claude` | `claude-opus-5` | Implementiert, als Alternative falls bereits ein eigener Anthropic-Key/eigenes Kontingent vorhanden ist | Technisch gleichwertig oder potenziell noch aktueller (Claude-5-Familie) als der Replicate-Endpunkt (`claude-opus-4.6`), aber ohne Mehrwert gegenüber der Replicate-Variante, solange kein eigener Anthropic-Vertrag/Kontingent vorliegt |
+| Google Gemini (direkt oder via Replicate) | `gemini` / `replicate` mit `google/gemini-3.1-pro` | `gemini-3-pro` bzw. `gemini-3.1-pro` | Getestet, aber **nicht empfohlen**: Im Test wurde entweder das Output-Token-Limit durch die finale JSON-Antwort gesprengt, oder (bei höherem Limit) das gesamte Budget vom internen "Thinking"-Modus verbraucht, sodass keine valide JSON-Antwort mehr ankam. Lösbar (Thinking-Parameter tunen), aber nicht weiter verfolgt, da Claude Opus 4.6 bereits überzeugt | 
+| ~~`lucataco/qwen3-vl-8b-instruct`~~ | `replicate` (alte Voreinstellung) | 8B offenes Modell | ❌ **Nicht mehr Standard** | Ursprünglicher Test-Default; liefert bei maßlosen/komplexen Plänen keine echte Geometrie (identische Platzhalter-Raumgrößen). Für sehr einfache, gut bemaßte Pläne als Kostenoption weiter nutzbar, aber nicht die Empfehlung |
+| ~~`lucataco/internvl3_5-30b`~~ | - | 30B offenes Modell | ❌ **Nicht verwenden** | Schlechtere, räumlich inkohärente Ausgabe UND mit $0.47/~8 Minuten pro Lauf unverhältnismäßig teuer und langsam für ein mittelmäßiges Ergebnis |
 
 Für die **Bild-/Fotorealismus-Stufe** (`backend/app/pipeline/render.py`, Auswahl über `RENDER_PROVIDER`):
 

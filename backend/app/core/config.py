@@ -22,11 +22,12 @@ class Settings(BaseSettings):
     gemini_parser_model: str = "gemini-3-pro"
 
     replicate_api_token: str = ""
-    # Vision-LLM auf Replicate als guenstigere/alternative Parsing-Option.
-    # Hinweis: Replicate-Modell-Slugs aendern sich; verifiziert am 2026-10-11
-    # per `replicate.Client().models.search(...)` gegen die tatsaechlich
-    # verfuegbaren Modelle (siehe docs/LLM-DECISION.md).
-    replicate_parser_model: str = "lucataco/qwen3-vl-8b-instruct"
+    # Replicate hostet auch proprietaere Modelle wie Claude/Gemini direkt -
+    # kein separater Anthropic-/Google-Key noetig. Live-Vergleichstest am
+    # 2026-10-11 (siehe tests/fixtures/floorplans/model_comparison/ +
+    # docs/LLM-DECISION.md): anthropic/claude-opus-4.6 lieferte klar die
+    # geometrisch plausibelste Ausgabe und ist daher der Standard.
+    replicate_parser_model: str = "anthropic/claude-opus-4.6"
 
     # --- Render-Provider (fotorealistische Veredelung auf fixierter Geometrie) ---
     # "preview" (GPU-frei, kein API-Key, siehe render.py) | "replicate"

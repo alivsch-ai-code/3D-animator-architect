@@ -108,21 +108,27 @@ frontend/
 | Fotorealistisches Rendering | **Schnittstelle + einfacher Preview-Fallback implementiert.** Produktionsreifes Fotorealismus-Backend (SDXL/ControlNet oder Blender headless) muss noch angebunden werden — erfordert GPU-Infrastruktur, die in dieser Umgebung nicht verfügbar ist. Siehe `backend/app/pipeline/render.py` für den Erweiterungspunkt |
 | IFC-Export | Nicht implementiert, Schema ist aber IFC-kompatibel angelegt (v2) |
 
-## Live-Testergebnis: Grenzen reiner VLM-Koordinatenextraktion
+## Live-Testergebnis: Modellwahl entscheidet stark über Geometrie-Qualität
 
 Live-Tests mit echten, gemeinfreien Grundrissen
-(`backend/tests/fixtures/floorplans/FINDINGS.md`) haben eine wichtige
-Erkenntnis bestätigt: Ein reines Vision-Chat-Modell (getestet:
-`lucataco/qwen3-vl-8b-instruct` via Replicate) liest Textinhalte (Raumlabels,
-Flächenangaben) zuverlässig, liefert bei maßlosen oder komplexen Plänen aber
-**keine echte pixelgenaue Geometrie** — teils identische Platzhalter-Boxen
-für sichtbar unterschiedlich große Räume, teils leere Ergebnisse durch
-Output-Token-Limits. Das ist eine bekannte Schwäche von VLMs bei
-"Grounding"-Aufgaben generell, kein reines Prompt- oder Modell-Problem.
-**Konsequenz für Punkt 2 der Roadmap unten**: Das spezialisierte
-Segmentierungsmodell ist damit nicht mehr "nice-to-have zur
-Kreuzvalidierung", sondern die empfohlene primäre Geometriequelle, mit dem
-LLM nur noch für Semantik (Raumtyp, Normprüfung, Stil).
+(`backend/tests/fixtures/floorplans/FINDINGS.md`,
+`backend/tests/fixtures/floorplans/model_comparison/`) zeigen: Ein kleines
+Vision-Chat-Modell (`lucataco/qwen3-vl-8b-instruct`, 8B) liest Textinhalte
+(Raumlabels, Flächenangaben) zuverlässig, liefert bei maßlosen oder
+komplexen Plänen aber **keine echte pixelgenaue Geometrie** — identische
+Platzhalter-Boxen für sichtbar unterschiedlich große Räume. Ein größeres
+offenes Modell (InternVL3.5-30B) war dabei nicht nur weiterhin schlecht
+(räumlich inkohärent), sondern auch unverhältnismäßig teuer/langsam
+($0.47, ~8 Minuten pro Lauf) — "größer" ist also nicht automatisch
+"besser genug". Ein starkes proprietäres Modell (**Claude Opus 4.6**,
+praktischerweise direkt über Replicate erreichbar ohne separaten
+Anthropic-Key) lieferte dagegen im selben Test klar unterschiedliche,
+plausible Raumgrößen bei vergleichbarer Laufzeit (~52s) — siehe
+Screenshots im Vergleichsordner. **Konsequenz**: Modellwahl ist der
+wirksamste Hebel, bevor eine aufwendigere Architekturänderung (dediziertes
+Segmentierungsmodell, siehe Punkt 2 der Roadmap) nötig wird; Letzteres
+bleibt als Option für noch höhere Zuverlässigkeit bei komplexen Plänen
+relevant, ist aber nicht mehr die einzige Abhilfe.
 
 ## Nächste Schritte (Roadmap)
 

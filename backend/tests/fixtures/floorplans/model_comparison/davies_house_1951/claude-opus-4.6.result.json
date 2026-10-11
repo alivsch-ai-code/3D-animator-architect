@@ -1,0 +1,436 @@
+```json
+{
+  "scale_hint": "geschaetzt ~1:100, kein Massstab im Plan angegeben. Schaetzgrundlage: Schlafzimmer ca. 3x3m, Garagenbreite ca. 3m, Tueren ca. 0.8-0.9m",
+  "walls": [
+    {
+      "id": "w1",
+      "start": {"x": 0.0, "y": 0.0},
+      "end": {"x": 6.0, "y": 0.0},
+      "thickness_m": 0.3,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w2",
+      "start": {"x": 6.0, "y": 0.0},
+      "end": {"x": 6.0, "y": 5.5},
+      "thickness_m": 0.3,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w3",
+      "start": {"x": 6.0, "y": 5.5},
+      "end": {"x": 10.5, "y": 5.5},
+      "thickness_m": 0.3,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w4",
+      "start": {"x": 10.5, "y": 5.5},
+      "end": {"x": 10.5, "y": 0.0},
+      "thickness_m": 0.3,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w5",
+      "start": {"x": 10.5, "y": 0.0},
+      "end": {"x": 6.0, "y": 0.0},
+      "thickness_m": 0.3,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w6",
+      "start": {"x": 0.0, "y": 0.0},
+      "end": {"x": 0.0, "y": 10.0},
+      "thickness_m": 0.3,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w7",
+      "start": {"x": 0.0, "y": 10.0},
+      "end": {"x": 3.5, "y": 10.0},
+      "thickness_m": 0.3,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": [
+        {
+          "type": "window",
+          "position_on_wall_m": 0.8,
+          "width_m": 1.8,
+          "height_m": 1.4,
+          "sill_height_m": 0.6
+        }
+      ]
+    },
+    {
+      "id": "w8",
+      "start": {"x": 3.5, "y": 10.0},
+      "end": {"x": 6.0, "y": 10.0},
+      "thickness_m": 0.3,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": [
+        {
+          "type": "window",
+          "position_on_wall_m": 0.5,
+          "width_m": 1.5,
+          "height_m": 1.4,
+          "sill_height_m": 0.6
+        }
+      ]
+    },
+    {
+      "id": "w9",
+      "start": {"x": 6.0, "y": 10.0},
+      "end": {"x": 6.0, "y": 5.5},
+      "thickness_m": 0.3,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w10",
+      "start": {"x": 10.5, "y": 5.5},
+      "end": {"x": 14.0, "y": 5.5},
+      "thickness_m": 0.3,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w11",
+      "start": {"x": 14.0, "y": 5.5},
+      "end": {"x": 14.0, "y": 10.0},
+      "thickness_m": 0.3,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": [
+        {
+          "type": "window",
+          "position_on_wall_m": 1.0,
+          "width_m": 2.0,
+          "height_m": 1.4,
+          "sill_height_m": 0.9
+        }
+      ]
+    },
+    {
+      "id": "w12",
+      "start": {"x": 14.0, "y": 10.0},
+      "end": {"x": 6.0, "y": 10.0},
+      "thickness_m": 0.3,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": [
+        {
+          "type": "door",
+          "position_on_wall_m": 6.5,
+          "width_m": 1.2,
+          "height_m": 2.1,
+          "sill_height_m": 0.0
+        }
+      ]
+    },
+    {
+      "id": "w13",
+      "start": {"x": 0.0, "y": 3.2},
+      "end": {"x": 3.0, "y": 3.2},
+      "thickness_m": 0.12,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": [
+        {
+          "type": "door",
+          "position_on_wall_m": 2.1,
+          "width_m": 0.8,
+          "height_m": 2.1,
+          "sill_height_m": 0.0
+        }
+      ]
+    },
+    {
+      "id": "w14",
+      "start": {"x": 3.0, "y": 0.0},
+      "end": {"x": 3.0, "y": 5.5},
+      "thickness_m": 0.12,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": [
+        {
+          "type": "door",
+          "position_on_wall_m": 3.5,
+          "width_m": 0.8,
+          "height_m": 2.1,
+          "sill_height_m": 0.0
+        }
+      ]
+    },
+    {
+      "id": "w15",
+      "start": {"x": 0.0, "y": 5.5},
+      "end": {"x": 6.0, "y": 5.5},
+      "thickness_m": 0.15,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": [
+        {
+          "type": "door",
+          "position_on_wall_m": 3.2,
+          "width_m": 0.9,
+          "height_m": 2.1,
+          "sill_height_m": 0.0
+        }
+      ]
+    },
+    {
+      "id": "w16",
+      "start": {"x": 3.0, "y": 3.2},
+      "end": {"x": 6.0, "y": 3.2},
+      "thickness_m": 0.12,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": [
+        {
+          "type": "door",
+          "position_on_wall_m": 0.2,
+          "width_m": 0.8,
+          "height_m": 2.1,
+          "sill_height_m": 0.0
+        }
+      ]
+    },
+    {
+      "id": "w17",
+      "start": {"x": 4.5, "y": 3.2},
+      "end": {"x": 4.5, "y": 5.5},
+      "thickness_m": 0.12,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": [
+        {
+          "type": "door",
+          "position_on_wall_m": 0.3,
+          "width_m": 0.8,
+          "height_m": 2.1,
+          "sill_height_m": 0.0
+        }
+      ]
+    },
+    {
+      "id": "w18",
+      "start": {"x": 1.8, "y": 3.2},
+      "end": {"x": 1.8, "y": 5.5},
+      "thickness_m": 0.12,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": [
+        {
+          "type": "door",
+          "position_on_wall_m": 0.3,
+          "width_m": 0.7,
+          "height_m": 2.1,
+          "sill_height_m": 0.0
+        }
+      ]
+    },
+    {
+      "id": "w19",
+      "start": {"x": 3.5, "y": 5.5},
+      "end": {"x": 3.5, "y": 10.0},
+      "thickness_m": 0.12,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": []
+    },
+    {
+      "id": "w20",
+      "start": {"x": 10.5, "y": 8.0},
+      "end": {"x": 14.0, "y": 8.0},
+      "thickness_m": 0.12,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": [
+        {
+          "type": "door",
+          "position_on_wall_m": 0.3,
+          "width_m": 0.9,
+          "height_m": 2.1,
+          "sill_height_m": 0.0
+        }
+      ]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "r1",
+      "name": "Bed 1",
+      "type": "bedroom",
+      "polygon": [
+        {"x": 0.0, "y": 0.0},
+        {"x": 3.0, "y": 0.0},
+        {"x": 3.0, "y": 3.2},
+        {"x": 0.0, "y": 3.2}
+      ],
+      "area_m2": 9.6
+    },
+    {
+      "id": "r2",
+      "name": "Bath",
+      "type": "bathroom",
+      "polygon": [
+        {"x": 0.0, "y": 3.2},
+        {"x": 1.8, "y": 3.2},
+        {"x": 1.8, "y": 5.5},
+        {"x": 0.0, "y": 5.5}
+      ],
+      "area_m2": 4.1
+    },
+    {
+      "id": "r3",
+      "name": "Bed 2",
+      "type": "bedroom",
+      "polygon": [
+        {"x": 3.0, "y": 0.0},
+        {"x": 6.0, "y": 0.0},
+        {"x": 6.0, "y": 3.2},
+        {"x": 3.0, "y": 3.2}
+      ],
+      "area_m2": 9.6
+    },
+    {
+      "id": "r4",
+      "name": "Bed 3",
+      "type": "bedroom",
+      "polygon": [
+        {"x": 3.0, "y": 3.2},
+        {"x": 4.5, "y": 3.2},
+        {"x": 4.5, "y": 5.5},
+        {"x": 3.0, "y": 5.5}
+      ],
+      "area_m2": 3.5
+    },
+    {
+      "id": "r5",
+      "name": "Garage",
+      "type": "storage",
+      "polygon": [
+        {"x": 1.8, "y": 3.2},
+        {"x": 3.0, "y": 3.2},
+        {"x": 3.0, "y": 5.5},
+        {"x": 1.8, "y": 5.5}
+      ],
+      "area_m2": 2.8
+    },
+    {
+      "id": "r6",
+      "name": "Hall",
+      "type": "hallway",
+      "polygon": [
+        {"x": 4.5, "y": 3.2},
+        {"x": 6.0, "y": 3.2},
+        {"x": 6.0, "y": 5.5},
+        {"x": 4.5, "y": 5.5}
+      ],
+      "area_m2": 3.5
+    },
+    {
+      "id": "r7",
+      "name": "Court",
+      "type": "other",
+      "polygon": [
+        {"x": 6.0, "y": 0.0},
+        {"x": 10.5, "y": 0.0},
+        {"x": 10.5, "y": 5.5},
+        {"x": 6.0, "y": 5.5}
+      ],
+      "area_m2": 24.8
+    },
+    {
+      "id": "r8",
+      "name": "Lounge",
+      "type": "living_room",
+      "polygon": [
+        {"x": 0.0, "y": 5.5},
+        {"x": 3.5, "y": 5.5},
+        {"x": 3.5, "y": 10.0},
+        {"x": 0.0, "y": 10.0}
+      ],
+      "area_m2": 15.8
+    },
+    {
+      "id": "r9",
+      "name": "Dining",
+      "type": "living_room",
+      "polygon": [
+        {"x": 3.5, "y": 5.5},
+        {"x": 6.0, "y": 5.5},
+        {"x": 6.0, "y": 10.0},
+        {"x": 3.5, "y": 10.0}
+      ],
+      "area_m2": 11.3
+    },
+    {
+      "id": "r10",
+      "name": "Kitchen",
+      "type": "kitchen",
+      "polygon": [
+        {"x": 10.5, "y": 5.5},
+        {"x": 14.0, "y": 5.5},
+        {"x": 14.0, "y": 8.0},
+        {"x": 10.5, "y": 8.0}
+      ],
+      "area_m2": 8.8
+    },
+    {
+      "id": "r11",
+      "name": "Terrace",
+      "type": "balcony",
+      "polygon": [
+        {"x": 10.5, "y": 8.0},
+        {"x": 14.0, "y": 8.0},
+        {"x": 14.0, "y": 10.0},
+        {"x": 10.5, "y": 10.0}
+      ],
+      "area_m2": 7.0
+    }
+  ],
+  "compliance_flags": [
+    {
+      "severity": "info",
+      "standard": "DIN 277",
+      "message": "Court (r7) ist als offener Innenhof erkennbar – je nach Überdachung ggf. keine NUF.",
+      "related_element_id": "r7"
+    },
+    {
+      "severity": "warning",
+      "standard": "DIN 18040-2",
+      "message": "Bed 3 (r4) wirkt mit ca. 3.5 m² sehr klein – evtl. Abstellraum statt Schlafzimmer oder Maßstabsfehler.",
+      "related_element_id": "r4"
+    },
+    {
+      "severity": "warning",
+      "standard": "Praxis",
+      "message": "Garage (r5) mit ca. 2.8 m² ist zu klein für ein echtes Fahrzeug; Label im Plan lautet 'Garage', moeglicherweise ist der Bereich groesser als hier geschaetzt oder das Label bezieht sich auf einen angrenzenden Raum. Unsicherheit vermerkt.",
+      "related_element_id": "r5"
+    },
+    {
+      "severity": "info",
+      "standard": "ISO 7519",
+      "message": "Kein Massstab im Plan angegeben. Alle Masse geschaetzt anhand typischer Raumproportionen (Schlafzimmer ~3×3m, Tuerbreiten ~0.8m).",
+      "related_element_id": null
+    }
+  ],
+  "source_notes": "Plan 'A II' – Einfamilienhaus im Mid-Century-Stil mit offenem Innenhof (Court). Kein Massstab und keine Massketten im Bild erkennbar. Massstab geschaetzt ueber typische Schlafzimmer- und Tuerbreiten. Der Grundriss zeigt ein L-foermiges Gebaeude: Schlaftrakt (Bed 1-3, Bath) im Nordwest-Fluegel, Wohnbereich (Lounge/Dining) im Suedwest-Fluegel, Kueche und Terrasse im Suedost-Bereich, offener Innenhof (Court) zentral. Garage-Label im Plan scheint an der Westkante zwischen Bath und Hall zu liegen – Groesse unsicher, Raumabgrenzung koennte anders sein als hier modelliert. Bed 3 und Garage-Polygone sind sehr klein und koennten in der Realitaet zum gleichen groesseren Raumblock gehoeren. Terrace ist als halboffener Aussenbereich erkennbar. Steinmauer/Gartenmauer im Sueden sichtbar aber nicht als Gebaeudehuellwand modelliert."
+}
+```

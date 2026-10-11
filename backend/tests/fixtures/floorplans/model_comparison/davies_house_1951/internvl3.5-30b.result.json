@@ -1,0 +1,220 @@
+{
+  "scale_hint": "geschaetzt, kein Massstab im Plan angegeben",
+  "walls": [
+    {
+      "id": "w1",
+      "start": {"x": 0.0, "y": 0.0},
+      "end": {"x": 3.0, "y": 0.0},
+      "thickness_m": 0.2,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w2",
+      "start": {"x": 3.0, "y": 0.0},
+      "end": {"x": 3.0, "y": 4.0},
+      "thickness_m": 0.2,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w3",
+      "start": {"x": 3.0, "y": 4.0},
+      "end": {"x": 6.0, "y": 4.0},
+      "thickness_m": 0.2,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w4",
+      "start": {"x": 6.0, "y": 4.0},
+      "end": {"x": 6.0, "y": 0.0},
+      "thickness_m": 0.2,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w5",
+      "start": {"x": 0.0, "y": 0.0},
+      "end": {"x": 0.0, "y": 3.0},
+      "thickness_m": 0.15,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": []
+    },
+    {
+      "id": "w6",
+      "start": {"x": 0.0, "y": 3.0},
+      "end": {"x": 3.0, "y": 3.0},
+      "thickness_m": 0.15,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": []
+    },
+    {
+      "id": "w7",
+      "start": {"x": 3.0, "y": 3.0},
+      "end": {"x": 3.0, "y": 4.0},
+      "thickness_m": 0.15,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": []
+    },
+    {
+      "id": "w8",
+      "start": {"x": 3.0, "y": 0.0},
+      "end": {"x": 3.0, "y": 3.0},
+      "thickness_m": 0.15,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": []
+    },
+    {
+      "id": "w9",
+      "start": {"x": 3.0, "y": 4.0},
+      "end": {"x": 6.0, "y": 4.0},
+      "thickness_m": 0.15,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": []
+    },
+    {
+      "id": "w10",
+      "start": {"x": 6.0, "y": 4.0},
+      "end": {"x": 6.0, "y": 0.0},
+      "thickness_m": 0.15,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": []
+    },
+    {
+      "id": "w11",
+      "start": {"x": 6.0, "y": 4.0},
+      "end": {"x": 10.0, "y": 4.0},
+      "thickness_m": 0.2,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w12",
+      "start": {"x": 10.0, "y": 4.0},
+      "end": {"x": 10.0, "y": 8.0},
+      "thickness_m": 0.2,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w13",
+      "start": {"x": 10.0, "y": 8.0},
+      "end": {"x": 6.0, "y": 8.0},
+      "thickness_m": 0.2,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w14",
+      "start": {"x": 6.0, "y": 8.0},
+      "end": {"x": 6.0, "y": 4.0},
+      "thickness_m": 0.2,
+      "height_m": 2.5,
+      "is_exterior": true,
+      "openings": []
+    },
+    {
+      "id": "w15",
+      "start": {"x": 6.0, "y": 8.0},
+      "end": {"x": 10.0, "y": 8.0},
+      "thickness_m": 0.15,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": []
+    },
+    {
+      "id": "w16",
+      "start": {"x": 10.0, "y": 8.0},
+      "end": {"x": 10.0, "y": 10.0},
+      "thickness_m": 0.15,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": []
+    },
+    {
+      "id": "w17",
+      "start": {"x": 10.0, "y": 10.0},
+      "end": {"x": 6.0, "y": 10.0},
+      "thickness_m": 0.15,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": []
+    },
+    {
+      "id": "w18",
+      "start": {"x": 6.0, "y": 10.0},
+      "end": {"x": 6.0, "y": 8.0},
+      "thickness_m": 0.15,
+      "height_m": 2.5,
+      "is_exterior": false,
+      "openings": []
+    }
+  ],
+  "rooms": [
+    {
+      "id": "r1",
+      "name": "Garage",
+      "type": "storage",
+      "polygon": [{"x": 0.0, "y": 0.0}, {"x": 3.0, "y": 0.0}, {"x": 3.0, "y": 3.0}, {"x": 0.0, "y": 3.0}],
+      "area_m2": 9.0
+    },
+    {
+      "id": "r2",
+      "name": "Bad",
+      "type": "bathroom",
+      "polygon": [{"x": 0.0, "y": 3.0}, {"x": 1.0, "y": 3.0}, {"x": 1.0, "y": 4.0}, {"x": 0.0, "y": 4.0}],
+      "area_m2": 1.0
+    },
+    {
+      "id": "r3",
+      "name": "Bad",
+      "type": "bathroom",
+      "polygon": [{"x": 1.0, "y": 3.0}, {"x": 2.0, "y": 3.0}, {"x": 2.0, "y": 4.0}, {"x": 1.0, "y": 4.0}],
+      "area_m2": 1.0
+    },
+    {
+      "id": "r4",
+      "name": "Bad",
+      "type": "bathroom",
+      "polygon": [{"x": 2.0, "y": 3.0}, {"x": 3.0, "y": 3.0}, {"x": 3.0, "y": 4.0}, {"x": 2.0, "y": 4.0}],
+      "area_m2": 1.0
+    },
+    {
+      "id": "r5",
+      "name": "Hall",
+      "type": "hallway",
+      "polygon": [{"x": 3.0, "y": 0.0}, {"x": 3.0, "y": 3.0}, {"x": 6.0, "y": 3.0}, {"x": 6.0, "y": 4.0}, {"x": 3.0, "y": 4.0}],
+      "area_m2": 9.0
+    },
+    {
+      "id": "r6",
+      "name": "Wohnen/Dining",
+      "type": "living_room",
+      "polygon": [{"x": 6.0, "y": 4.0}, {"x": 10.0, "y": 4.0}, {"x": 10.0, "y": 8.0}, {"x": 6.0, "y": 8.0}],
+      "area_m2": 16.0
+    },
+    {
+      "id": "r7",
+      "name": "Terrasse",
+      "type": "other",
+      "polygon": [{"x": 6.0, "y": 8.0}, {"x": 10.0, "y": 8.0}, {"x": 10.0, "y": 10.0}, {"x": 6.0, "y": 10.0}],
+      "area_m2": 8.0
+    }
+  ],
+  "compliance_flags": [],
+  "source_notes": "Kein expliziter Maßstab im Plan angegeben. Die Größen wurden anhand typischer Raumgrößen im DACH-Raum geschätzt. Die Breite der Türen und Fenster wurde nicht explizit dargestellt, daher wurden diese nicht hinzugefügt."
+}

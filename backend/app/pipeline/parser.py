@@ -206,14 +206,55 @@ class GeminiFloorPlanParser:
         return _parse_json_response(response.text, source="Gemini")
 
 
-class ReplicateFloorPlanParser:
-    """Guenstigere Alternative: offenes Vision-LLM, gehostet auf Replicate.
+def _build_replicate_input(model_slug: str, data_uri: str, user_text: str, system_prompt: str) -> dict:
+    """Input-Feldnamen sind auf Replicate je Modell(-familie) unterschiedlich
+    benannt - diese Adapter-Funktion kapselt das. Live getestet am
+    2026-10-11 gegen backend/tests/fixtures/floorplans/davies_house_1951.png,
+    Ergebnisse/Screenshots in tests/fixtures/floorplans/model_comparison/:
+    anthropic/claude-opus-4.6 lieferte dabei klar die geometrisch plausibelste
+    Ausgabe (echte, unterschiedliche Raumproportionen statt Platzhalter-Raster),
+    bei vergleichbarer Laufzeit (~50s) zu google/gemini-3.1-pro. Ein 30B-
+    Open-Weights-Modell (internvl3.5-30b) wurde ebenfalls getestet: deutlich
+    schlechtere, raeumlich inkohaerente Ausgabe UND mit $0.47/~8min pro Lauf
+    unverhaeltnismaessig teuer/langsam - absichtlich NICHT als Option
+    vorgesehen, siehe docs/LLM-DECISION.md.
+    """
+    full_prompt = f"{system_prompt}\n\n{user_text}"
 
-    Empfehlung (docs/LLM-DECISION.md): qwen/qwen2.5-vl-72b-instruct als starkes
-    offenes Vision-Modell mit guter struktureller JSON-Ausgabe. Qualitaet bei
-    komplexen Mehrfach-Constraint-Pruefungen (mehrere Normen gleichzeitig) liegt
-    erfahrungsgemaess unter Claude Opus 5 - empfohlen fuer Kostenoptimierung bei
-    einfachen Plaenen, nicht als Standard-Backend.
+    if model_slug.startswith("anthropic/"):
+        return {
+            "image": data_uri,
+            "prompt": user_text,
+            "system_prompt": system_prompt,
+            "max_tokens": 8000,
+            "max_image_resolution": 1.5,
+        }
+    if model_slug.startswith("google/gemini"):
+        return {
+            "images": [data_uri],
+            "prompt": user_text,
+            "system_instruction": system_prompt,
+            "max_output_tokens": 20000,
+        }
+    # Generischer Fallback (z.B. lucataco/qwen3-vl-*): kein system_prompt-Feld,
+    # daher alles in den Prompt gepackt.
+    return {
+        "media": data_uri,
+        "prompt": full_prompt,
+        "max_new_tokens": 4096,
+        "temperature": 0.1,
+    }
+
+
+class ReplicateFloorPlanParser:
+    """Parser ueber auf Replicate gehostete Modelle - sowohl offene
+    Open-Weights-Modelle als auch proprietaere Modelle wie Claude/Gemini, die
+    Replicate selbst als gehostete Endpunkte anbietet (kein separater
+    Anthropic-/Google-Key noetig, siehe docs/LLM-DECISION.md).
+
+    Empfehlung/Standard: anthropic/claude-opus-4.6 - siehe
+    _build_replicate_input() fuer die Live-Testergebnisse, die zu dieser
+    Empfehlung gefuehrt haben.
     """
 
     def __init__(self, api_token: str | None = None, model: str | None = None) -> None:
@@ -221,28 +262,20 @@ class ReplicateFloorPlanParser:
         import replicate as replicate_sdk
 
         self._client = replicate_sdk.Client(api_token=api_token or settings.replicate_api_token)
-        self._model = _resolve_version_ref(self._client, model or settings.replicate_parser_model)
+        self._model_slug = model or settings.replicate_parser_model
+        self._model = _resolve_version_ref(self._client, self._model_slug)
 
     def parse_floorplan(self, image_bytes: bytes, media_type: str = "image/png") -> FloorPlanGeometry:
         image_b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
         data_uri = f"data:{media_type};base64,{image_b64}"
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(standards_context=load_standards_context())
-
-        # Input-Feldnamen sind modellspezifisch (hier: lucataco/qwen3-vl-8b-instruct
-        # nutzt "media" statt "image"); bei Wechsel des Modells pruefen via
-        # `replicate.Client().models.get(slug).latest_version.openapi_schema`.
-        output = self._client.run(
-            self._model,
-            input={
-                "media": data_uri,
-                "prompt": (
-                    f"{system_prompt}\n\nAnalysiere diesen Grundriss und gib die "
-                    "exakte strukturierte Geometrie als JSON zurueck."
-                ),
-                "max_new_tokens": 4096,
-                "temperature": 0.1,
-            },
+        user_text = (
+            "Analysiere diesen Grundriss und gib die exakte strukturierte "
+            "Geometrie als JSON zurueck."
         )
+
+        input_payload = _build_replicate_input(self._model_slug, data_uri, user_text, system_prompt)
+        output = self._client.run(self._model, input=input_payload)
         raw_text = "".join(output) if not isinstance(output, str) else output
         return _parse_json_response(raw_text, source="Replicate")
 
