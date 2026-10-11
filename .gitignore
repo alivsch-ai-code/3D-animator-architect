@@ -21,3 +21,6 @@ docs/DEPLOYMENT.local.md
 
 # OS
 .DS_Store
+
+# Claude Code Arbeitskopien (Agent-Worktrees)
+.claude/

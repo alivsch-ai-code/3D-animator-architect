@@ -207,10 +207,11 @@ def _resolve_version_ref(client, model_slug: str) -> str:
 
 def _parse_json_response(raw_text: str, source: str) -> FloorPlanGeometry:
     text = raw_text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
+    # Modelle (v.a. Gemini) umrahmen das JSON gern mit Code-Fences oder
+    # Begleittext - das aeusserste {...} ist das eigentliche Objekt.
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end > start:
+        text = text[start : end + 1]
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
