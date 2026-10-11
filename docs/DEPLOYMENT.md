@@ -40,6 +40,12 @@ Dev-Prozesse beendet hatte):
   (`npm run build` + `next start`, nicht der Dev-Server), bindet auf
   `127.0.0.1:3001`
 
+Die nginx-API-Location setzt `proxy_connect_timeout`, `proxy_send_timeout` und
+`proxy_read_timeout` jeweils auf 300 Sekunden, damit lange Grundriss-Parsing-
+und Modellierungsanfragen nicht vorzeitig mit einem Gateway-Timeout abbrechen.
+Die versionierte Site-Konfiguration liegt unter
+[`deploy/nginx/architect.azamatsysteme.fun.conf`](../deploy/nginx/architect.azamatsysteme.fun.conf).
+
 Alle drei sind `enabled` (Autostart) und `Restart=always`. Unit-Dateien unter
 `/etc/systemd/system/3d-architect-*.service` auf dem Zielserver.
 
