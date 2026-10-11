@@ -8,7 +8,10 @@
 > Replicate-Token reicht damit für Parsing UND Rendering, kein separater
 > Anthropic-/Google-Key nötig. Empfohlener Standard ist jetzt
 > `anthropic/claude-opus-4.6` über `PARSER_PROVIDER=replicate`. Details siehe
-> "Implementierte Provider-Alternativen" unten.
+> "Implementierte Provider-Alternativen" unten. Der Laufzeitversuch mit
+> `google/gemini-3-flash` am selben Tag war im vollständigen Pipeline-Pfad
+> langsam und lieferte einen Geometriefehler; deshalb wurde es nicht als
+> Produktionsmodell übernommen.
 
 ## Kernaussage zuerst
 
@@ -57,6 +60,7 @@ Auf expliziten Wunsch sind zwei weitere Backends real implementiert, nicht nur d
 | Google Gemini (direkt oder via Replicate) | `gemini` / `replicate` mit `google/gemini-3.1-pro` | `gemini-3-pro` bzw. `gemini-3.1-pro` | Getestet, aber **nicht empfohlen**: Im Test wurde entweder das Output-Token-Limit durch die finale JSON-Antwort gesprengt, oder (bei höherem Limit) das gesamte Budget vom internen "Thinking"-Modus verbraucht, sodass keine valide JSON-Antwort mehr ankam. Lösbar (Thinking-Parameter tunen), aber nicht weiter verfolgt, da Claude Opus 4.6 bereits überzeugt | 
 | ~~`lucataco/qwen3-vl-8b-instruct`~~ | `replicate` (alte Voreinstellung) | 8B offenes Modell | ❌ **Nicht mehr Standard** | Ursprünglicher Test-Default; liefert bei maßlosen/komplexen Plänen keine echte Geometrie (identische Platzhalter-Raumgrößen). Für sehr einfache, gut bemaßte Pläne als Kostenoption weiter nutzbar, aber nicht die Empfehlung |
 | ~~`lucataco/internvl3_5-30b`~~ | - | 30B offenes Modell | ❌ **Nicht verwenden** | Schlechtere, räumlich inkohärente Ausgabe UND mit $0.47/~8 Minuten pro Lauf unverhältnismäßig teuer und langsam für ein mittelmäßiges Ergebnis |
+| ~~`google/gemini-3-flash`~~ | `replicate` | Gemini 3 Flash | ❌ Nicht produktiv gewählt | Am Referenzplan direkt in ~23 s mit valider Antwort getestet, aber der vollständige Parser-/CV-/Retry-Pfad dauerte ~78 s und endete mit einem Geometriefehler. Damit keine verlässliche Latenzverbesserung im realen Ablauf |
 
 Für die **Bild-/Fotorealismus-Stufe** (`backend/app/pipeline/render.py`, Auswahl über `RENDER_PROVIDER`):
 

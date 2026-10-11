@@ -23,13 +23,10 @@ class Settings(BaseSettings):
 
     replicate_api_token: str = ""
     # Replicate hostet auch proprietaere Modelle wie Claude/Gemini direkt -
-    # kein separater Anthropic-/Google-Key noetig. Seit die Geometrie per
-    # Bildanalyse (pipeline/cv_extract.py) extrahiert wird, liefert das LLM
-    # nur noch Bedeutung (Raumnamen/-typen, Flaechen, Moebeltypen, Normhinweise)
-    # - dafuer reicht das schnellere, guenstigere Gemini 2.5 Flash (Nutzer-
-    # entscheidung). anthropic/claude-opus-4.6 bleibt per Konfiguration
-    # waehlbar, siehe docs/LLM-DECISION.md.
-    replicate_parser_model: str = "google/gemini-2.5-flash"
+    # kein separater Anthropic-/Google-Key noetig. Claude Opus 4.6 ist auf
+    # dem Referenzgrundriss auf plausible Geometrie getestet; siehe
+    # docs/LLM-DECISION.md fuer Vergleichsergebnisse und Alternativen.
+    replicate_parser_model: str = "anthropic/claude-opus-4.6"
 
     # --- Render-Provider (fotorealistische Veredelung auf fixierter Geometrie) ---
     # "preview" (GPU-frei, kein API-Key, siehe render.py) | "replicate"
