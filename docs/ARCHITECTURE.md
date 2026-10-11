@@ -199,6 +199,10 @@ reduzieren.
 
 ## Nächste Schritte (Roadmap)
 
+> Für den realistischeren Rundgang (echte Möbel-Assets, Licht/Postprocessing,
+> KI-Video-Rundgang) siehe die ausführliche Recherche und Priorisierung in
+> [REALISTIC-WALKTHROUGH.md](REALISTIC-WALKTHROUGH.md).
+
 1. Render-Backend anbinden (Replicate/Stability-API für ControlNet, oder Blender-Worker).
 2. Spezialisiertes Segmentierungsmodell (CubiCasa5K-trainiert, z.B. RoomFormer) als
    primäre Geometrie-Quelle statt/zusätzlich zu reiner LLM-Koordinatenextraktion
